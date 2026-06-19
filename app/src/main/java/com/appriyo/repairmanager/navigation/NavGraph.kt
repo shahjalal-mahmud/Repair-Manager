@@ -12,20 +12,20 @@ import com.appriyo.repairmanager.presentation.screens.CustomerDetailsScreen
 import com.appriyo.repairmanager.presentation.screens.CustomerListScreen
 import com.appriyo.repairmanager.presentation.screens.DashboardScreen
 import com.appriyo.repairmanager.presentation.screens.LoginScreen
-import com.appriyo.repairmanager.presentation.screens.SplashScreen
 
 @Composable
-fun NavGraph(modifier: Modifier = Modifier) {
+fun NavGraph(
+    startDestination: String, // Accept the dynamically resolved screen here
+    modifier: Modifier = Modifier
+) {
     val navController = rememberNavController()
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Splash.route,
+        startDestination = startDestination,
         modifier = modifier
     ) {
-        composable(Screen.Splash.route) {
-            SplashScreen(navController)
-        }
+        // Composable SplashScreen route has been entirely removed
 
         composable(Screen.Login.route) {
             LoginScreen(navController)

@@ -1,7 +1,6 @@
 package com.appriyo.repairmanager.navigation
 
 sealed class Screen(val route: String) {
-    object Splash : Screen("splash")
     object Login : Screen("login")
     object Dashboard : Screen("dashboard")
     object AddRepair : Screen("add_repair")

@@ -1,5 +1,4 @@
-import java.util.Properties
-
+// app/build.gradle.kts
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -19,17 +18,6 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // 🔐 Read Web Client ID from local.properties and inject as a string resource
-        val properties = Properties()
-        val localPropertiesFile = rootProject.file("local.properties")
-        if (localPropertiesFile.exists()) {
-            localPropertiesFile.inputStream().use { properties.load(it) }
-        }
-
-        // Read the property. Note the added escaped quotes so it resolves as a valid XML String literal
-        val webClientId = properties.getProperty("WEB_CLIENT_ID") ?: "\"\""
-        resValue("string", "default_web_client_id", webClientId)
     }
 
     buildTypes {
@@ -41,13 +29,17 @@ android {
             )
         }
     }
+
+    // sourceCompatibility, targetCompatibility, and jvmTarget MUST all match —
+    // this mismatch was the cause of your last build failure.
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
+
     buildFeatures {
         compose = true
     }
@@ -66,6 +58,8 @@ dependencies {
 
     implementation(libs.androidx.navigation.compose)
 
+    // Koin — BOM keeps all Koin modules on matched, tested versions
+    implementation(platform(libs.koin.bom))
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)
 

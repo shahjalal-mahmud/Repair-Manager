@@ -1,7 +1,10 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -16,6 +19,17 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // 🔐 Read Web Client ID from local.properties and inject as a string resource
+        val properties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.inputStream().use { properties.load(it) }
+        }
+
+        // Read the property. Note the added escaped quotes so it resolves as a valid XML String literal
+        val webClientId = properties.getProperty("WEB_CLIENT_ID") ?: "\"\""
+        resValue("string", "default_web_client_id", webClientId)
     }
 
     buildTypes {
@@ -50,14 +64,11 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.core.splashscreen)
 
-    // Navigation
     implementation(libs.androidx.navigation.compose)
 
-    // Koin
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)
 
-    // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)

@@ -8,10 +8,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="com.appriyo.repairmanager" />
+                  <option name="mobileSdkAppId" value="1:672163213400:android:92e6c1b873aed42fa35a2d" />
+                  <option name="projectId" value="repair-manager-eafc8" />
+                  <option name="projectNumber" value="672163213400" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />

@@ -3,6 +3,7 @@ package com.appriyo.repairmanager.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.appriyo.repairmanager.data.model.RepairStatus
 import com.appriyo.repairmanager.data.repository.AuthRepository
 import com.appriyo.repairmanager.data.repository.RepairRepository
 import com.appriyo.repairmanager.presentation.state.AddRepairUiState
@@ -13,10 +14,8 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel for the AddRepairScreen.
  *
- * Handles:
- *  - Field validation
- *  - Calling the repository to create the repair record
- *  - Exposing UI state (loading / success / error) via StateFlow
+ * Per Phase 1 spec, only Customer Name and Phone Number are required;
+ * everything else (device info, accessories, security info, etc.) is optional.
  */
 class AddRepairViewModel(
     private val repairRepository: RepairRepository,
@@ -26,25 +25,26 @@ class AddRepairViewModel(
     private val _uiState = MutableStateFlow(AddRepairUiState())
     val uiState = _uiState.asStateFlow()
 
-    /**
-     * Validates the supplied fields and, if valid, creates a new repair record
-     * in Firestore via [RepairRepository.createRepair].
-     */
     fun saveRepair(
         customerName: String,
         phoneNumber: String,
-        deviceName: String,
-        problem: String,
+        deviceModel: String,
+        problemDescription: String,
         expectedDeliveryDate: String,
-        paymentInfo: String
+        paymentInfo: String,
+        additionalDetails: String,
+        boxNumber: String,
+        securityType: String,
+        password: String,
+        pattern: String,
+        batteryIncluded: Boolean,
+        simIncluded: Boolean,
+        memoryCardIncluded: Boolean,
+        simTrayIncluded: Boolean,
+        backCoverIncluded: Boolean,
+        deadPhonePermission: Boolean
     ) {
-        val errors = validateFields(
-            customerName = customerName,
-            phoneNumber = phoneNumber,
-            deviceName = deviceName,
-            problem = problem,
-            expectedDeliveryDate = expectedDeliveryDate
-        )
+        val errors = validateFields(customerName, phoneNumber)
 
         if (errors.isNotEmpty()) {
             _uiState.value = _uiState.value.copy(
@@ -76,10 +76,22 @@ class AddRepairViewModel(
             val result = repairRepository.createRepair(
                 customerName = customerName.trim(),
                 phoneNumber = phoneNumber.trim(),
-                deviceName = deviceName.trim(),
-                problem = problem.trim(),
+                deviceModel = deviceModel.trim(),
+                problemDescription = problemDescription.trim(),
                 expectedDeliveryDate = expectedDeliveryDate.trim(),
                 paymentInfo = paymentInfo.trim(),
+                additionalDetails = additionalDetails.trim(),
+                boxNumber = boxNumber.trim(),
+                securityType = securityType,
+                password = password.trim(),
+                pattern = pattern.trim(),
+                batteryIncluded = batteryIncluded,
+                simIncluded = simIncluded,
+                memoryCardIncluded = memoryCardIncluded,
+                simTrayIncluded = simTrayIncluded,
+                backCoverIncluded = backCoverIncluded,
+                deadPhonePermission = deadPhonePermission,
+                status = RepairStatus.PENDING,
                 createdBy = currentUserId
             )
 
@@ -106,8 +118,7 @@ class AddRepairViewModel(
 
     /**
      * Resets the success/error flags. Call after the UI has reacted to a
-     * success or error event (e.g. after navigating away or dismissing a snackbar)
-     * to avoid re-triggering the same one-time event on recomposition.
+     * success or error event to avoid re-triggering the same one-time event on recomposition.
      */
     fun consumeOneTimeEvents() {
         _uiState.value = _uiState.value.copy(
@@ -118,10 +129,7 @@ class AddRepairViewModel(
 
     private fun validateFields(
         customerName: String,
-        phoneNumber: String,
-        deviceName: String,
-        problem: String,
-        expectedDeliveryDate: String
+        phoneNumber: String
     ): Map<String, String> {
         val errors = mutableMapOf<String, String>()
 
@@ -129,22 +137,11 @@ class AddRepairViewModel(
             errors["customerName"] = "Customer name is required."
         }
 
-        if (phoneNumber.isBlank()) {
+        val trimmedPhone = phoneNumber.trim()
+        if (trimmedPhone.isBlank()) {
             errors["phoneNumber"] = "Phone number is required."
-        } else if (phoneNumber.trim().length < 6) {
-            errors["phoneNumber"] = "Enter a valid phone number."
-        }
-
-        if (deviceName.isBlank()) {
-            errors["deviceName"] = "Device name is required."
-        }
-
-        if (problem.isBlank()) {
-            errors["problem"] = "Problem description is required."
-        }
-
-        if (expectedDeliveryDate.isBlank()) {
-            errors["expectedDeliveryDate"] = "Expected delivery date is required."
+        } else if (!trimmedPhone.matches(Regex("^\\d{11}$"))) {
+            errors["phoneNumber"] = "Phone number must be exactly 11 digits."
         }
 
         return errors

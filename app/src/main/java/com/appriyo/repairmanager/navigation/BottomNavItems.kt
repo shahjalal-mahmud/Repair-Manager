@@ -2,9 +2,9 @@
 package com.appriyo.repairmanager.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Note
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -21,13 +21,13 @@ sealed class BottomNavItem(
 
     object Customers : BottomNavItem(
         route = Screen.CustomerList.route,
-        icon = Icons.Default.List,
+        icon = Icons.AutoMirrored.Filled.List,
         label = "Customers"
     )
 
     object Notes : BottomNavItem(
         route = Screen.Notes.route,
-        icon = Icons.Default.Note,
+        icon = Icons.AutoMirrored.Filled.Note,
         label = "Notes"
     )
 

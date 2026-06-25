@@ -1,12 +1,12 @@
-// app/src/main/java/com/appriyo/repairmanager/navigation/NavGraph.kt
+// app/src/main/java/com/appriyo/repairmanager/navigation/NavGraph.kt (Updated)
 package com.appriyo.repairmanager.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.appriyo.repairmanager.presentation.screens.AddRepairScreen
 import com.appriyo.repairmanager.presentation.screens.CustomerDetailsScreen
@@ -18,11 +18,10 @@ import com.appriyo.repairmanager.presentation.screens.NotesScreen
 
 @Composable
 fun NavGraph(
+    navController: NavHostController,
     startDestination: String,
     modifier: Modifier = Modifier
 ) {
-    val navController = rememberNavController()
-
     NavHost(
         navController = navController,
         startDestination = startDestination,

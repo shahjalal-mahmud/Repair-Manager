@@ -53,7 +53,7 @@ fun LoginScreen(
     LaunchedEffect(authState) {
         when (authState) {
             is AuthState.Success -> {
-                navController.navigate(Screen.Dashboard.route) {
+                navController.navigate(Screen.AddRepair.route) {
                     popUpTo(Screen.Login.route) { inclusive = true }
                 }
                 viewModel.resetState()

@@ -111,8 +111,8 @@ fun AddRepairScreen(
                 Toast.LENGTH_LONG
             ).show()
             viewModel.consumeOneTimeEvents()
-            navController.navigate(Screen.Dashboard.route) {
-                popUpTo(Screen.Dashboard.route) { inclusive = true }
+            navController.navigate(Screen.AddRepair.route) {
+                popUpTo(Screen.AddRepair.route) { inclusive = true }
             }
         }
     }

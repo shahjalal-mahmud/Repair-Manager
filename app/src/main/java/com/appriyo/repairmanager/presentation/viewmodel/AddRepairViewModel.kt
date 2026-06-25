@@ -19,7 +19,95 @@ class AddRepairViewModel(
     private val _uiState = MutableStateFlow(AddRepairUiState())
     val uiState = _uiState.asStateFlow()
 
-    fun saveRepair(
+    /**
+     * Save repair without printing
+     */
+    fun saveRepairOnly(
+        customerName: String,
+        phoneNumber: String,
+        deviceModel: String,
+        problemDescription: String,
+        expectedDeliveryDate: String,
+        paymentInfo: String,
+        additionalDetails: String,
+        boxNumber: String,
+        securityType: String,
+        password: String,
+        pattern: String,
+        batteryIncluded: Boolean,
+        simIncluded: Boolean,
+        memoryCardIncluded: Boolean,
+        simTrayIncluded: Boolean,
+        backCoverIncluded: Boolean,
+        deadPhonePermission: Boolean
+    ) {
+        saveRepair(
+            customerName = customerName,
+            phoneNumber = phoneNumber,
+            deviceModel = deviceModel,
+            problemDescription = problemDescription,
+            expectedDeliveryDate = expectedDeliveryDate,
+            paymentInfo = paymentInfo,
+            additionalDetails = additionalDetails,
+            boxNumber = boxNumber,
+            securityType = securityType,
+            password = password,
+            pattern = pattern,
+            batteryIncluded = batteryIncluded,
+            simIncluded = simIncluded,
+            memoryCardIncluded = memoryCardIncluded,
+            simTrayIncluded = simTrayIncluded,
+            backCoverIncluded = backCoverIncluded,
+            deadPhonePermission = deadPhonePermission,
+            shouldPrint = false
+        )
+    }
+
+    /**
+     * Save repair and print invoice
+     */
+    fun saveAndPrintRepair(
+        customerName: String,
+        phoneNumber: String,
+        deviceModel: String,
+        problemDescription: String,
+        expectedDeliveryDate: String,
+        paymentInfo: String,
+        additionalDetails: String,
+        boxNumber: String,
+        securityType: String,
+        password: String,
+        pattern: String,
+        batteryIncluded: Boolean,
+        simIncluded: Boolean,
+        memoryCardIncluded: Boolean,
+        simTrayIncluded: Boolean,
+        backCoverIncluded: Boolean,
+        deadPhonePermission: Boolean
+    ) {
+        saveRepair(
+            customerName = customerName,
+            phoneNumber = phoneNumber,
+            deviceModel = deviceModel,
+            problemDescription = problemDescription,
+            expectedDeliveryDate = expectedDeliveryDate,
+            paymentInfo = paymentInfo,
+            additionalDetails = additionalDetails,
+            boxNumber = boxNumber,
+            securityType = securityType,
+            password = password,
+            pattern = pattern,
+            batteryIncluded = batteryIncluded,
+            simIncluded = simIncluded,
+            memoryCardIncluded = memoryCardIncluded,
+            simTrayIncluded = simTrayIncluded,
+            backCoverIncluded = backCoverIncluded,
+            deadPhonePermission = deadPhonePermission,
+            shouldPrint = true
+        )
+    }
+
+    private fun saveRepair(
         customerName: String,
         phoneNumber: String,
         deviceModel: String,
@@ -37,7 +125,7 @@ class AddRepairViewModel(
         simTrayIncluded: Boolean,
         backCoverIncluded: Boolean,
         deadPhonePermission: Boolean,
-        shouldPrint: Boolean = true
+        shouldPrint: Boolean
     ) {
         val errors = validateFields(customerName, phoneNumber)
 

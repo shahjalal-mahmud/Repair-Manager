@@ -24,7 +24,7 @@ class MainViewModel(private val authRepository: AuthRepository) : ViewModel() {
             try {
                 // Real auth check using repository state
                 if (authRepository.isUserLoggedIn()) {
-                    _startDestination.value = Screen.Dashboard.route
+                    _startDestination.value = Screen.AddRepair.route
                 } else {
                     _startDestination.value = Screen.Login.route
                 }

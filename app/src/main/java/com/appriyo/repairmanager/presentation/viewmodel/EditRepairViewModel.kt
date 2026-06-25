@@ -1,31 +1,60 @@
-// app/src/main/java/com/appriyo/repairmanager/presentation/viewmodel/AddRepairViewModel.kt
+// app/src/main/java/com/appriyo/repairmanager/presentation/viewmodel/EditRepairViewModel.kt
 package com.appriyo.repairmanager.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.appriyo.repairmanager.data.model.RepairStatus
-import com.appriyo.repairmanager.data.repository.AuthRepository
 import com.appriyo.repairmanager.data.repository.RepairRepository
-import com.appriyo.repairmanager.presentation.state.AddRepairUiState
+import com.appriyo.repairmanager.presentation.state.EditRepairUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel for the AddRepairScreen.
+ * ViewModel for the EditRepairScreen.
  *
- * Per Phase 1 spec, only Customer Name and Phone Number are required;
- * everything else (device info, accessories, security info, etc.) is optional.
+ * Loads the repair once (a live-updating form would be confusing to edit),
+ * validates, and writes updates back via [RepairRepository.updateRepair].
+ * id, serialNumber, createdAt and createdBy are never touched here.
  */
-class AddRepairViewModel(
-    private val repairRepository: RepairRepository,
-    private val authRepository: AuthRepository
+class EditRepairViewModel(
+    private val repairRepository: RepairRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(AddRepairUiState())
+    private val _uiState = MutableStateFlow(EditRepairUiState())
     val uiState = _uiState.asStateFlow()
 
-    fun saveRepair(
+    fun loadRepair(repairId: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingInitialData = true, errorMessage = null)
+
+            val result = repairRepository.getRepair(repairId)
+
+            result.fold(
+                onSuccess = { repair ->
+                    if (repair == null) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoadingInitialData = false,
+                            errorMessage = "This repair record could not be found."
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isLoadingInitialData = false,
+                            repair = repair
+                        )
+                    }
+                },
+                onFailure = { exception ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingInitialData = false,
+                        errorMessage = exception.localizedMessage ?: "Failed to load repair record."
+                    )
+                }
+            )
+        }
+    }
+
+    fun updateRepair(
+        repairId: String,
         customerName: String,
         phoneNumber: String,
         deviceModel: String,
@@ -42,7 +71,8 @@ class AddRepairViewModel(
         memoryCardIncluded: Boolean,
         simTrayIncluded: Boolean,
         backCoverIncluded: Boolean,
-        deadPhonePermission: Boolean
+        deadPhonePermission: Boolean,
+        status: String
     ) {
         val errors = validateFields(customerName, phoneNumber)
 
@@ -55,25 +85,11 @@ class AddRepairViewModel(
             return
         }
 
-        val currentUserId = authRepository.getCurrentUser()?.uid.orEmpty()
-
-        if (currentUserId.isEmpty()) {
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                isSuccess = false,
-                errorMessage = "You must be signed in to save a repair record."
-            )
-            return
-        }
-
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isLoading = true,
-                errorMessage = null,
-                fieldErrors = emptyMap()
-            )
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, fieldErrors = emptyMap())
 
-            val result = repairRepository.createRepair(
+            val result = repairRepository.updateRepair(
+                repairId = repairId,
                 customerName = customerName.trim(),
                 phoneNumber = phoneNumber.trim(),
                 deviceModel = deviceModel.trim(),
@@ -91,46 +107,29 @@ class AddRepairViewModel(
                 simTrayIncluded = simTrayIncluded,
                 backCoverIncluded = backCoverIncluded,
                 deadPhonePermission = deadPhonePermission,
-                status = RepairStatus.PENDING,
-                createdBy = currentUserId
+                status = status
             )
 
             result.fold(
-                onSuccess = { repair ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        isSuccess = true,
-                        errorMessage = null,
-                        generatedSerialNumber = repair.serialNumber
-                    )
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(isLoading = false, isSuccess = true)
                 },
                 onFailure = { exception ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isSuccess = false,
-                        errorMessage = exception.localizedMessage
-                            ?: "Failed to save repair record. Please try again."
+                        errorMessage = exception.localizedMessage ?: "Failed to update repair record."
                     )
                 }
             )
         }
     }
 
-    /**
-     * Resets the success/error flags. Call after the UI has reacted to a
-     * success or error event to avoid re-triggering the same one-time event on recomposition.
-     */
     fun consumeOneTimeEvents() {
-        _uiState.value = _uiState.value.copy(
-            isSuccess = false,
-            errorMessage = null
-        )
+        _uiState.value = _uiState.value.copy(isSuccess = false, errorMessage = null)
     }
 
-    private fun validateFields(
-        customerName: String,
-        phoneNumber: String
-    ): Map<String, String> {
+    private fun validateFields(customerName: String, phoneNumber: String): Map<String, String> {
         val errors = mutableMapOf<String, String>()
 
         if (customerName.isBlank()) {

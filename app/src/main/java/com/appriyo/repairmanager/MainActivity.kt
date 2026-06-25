@@ -1,3 +1,4 @@
+// app/src/main/java/com/appriyo/repairmanager/MainActivity.kt
 package com.appriyo.repairmanager
 
 import android.os.Bundle
@@ -11,14 +12,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.appriyo.repairmanager.navigation.NavGraph
+import com.appriyo.repairmanager.presentation.screens.MainScreen
 import com.appriyo.repairmanager.presentation.viewmodel.MainViewModel
 import com.appriyo.repairmanager.ui.theme.RepairManagerTheme
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class MainActivity : ComponentActivity() {
 
-    // Handled safely via Koin Injection
     private val viewModel: MainViewModel by viewModel()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val startRoute by viewModel.startDestination.collectAsState()
-                    NavGraph(startDestination = startRoute)
+                    MainScreen(startDestination = startRoute)
                 }
             }
         }

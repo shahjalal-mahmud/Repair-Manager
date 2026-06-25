@@ -14,6 +14,11 @@ import java.util.Date
  * IMPORTANT: This class requires a no-argument constructor for Firestore's
  * automatic deserialization (toObject<Repair>()). All properties have default
  * values, which satisfies that requirement.
+ *
+ * NOTE (Phase 1 migration): the original MVP used `deviceName` / `problem`.
+ * These have been renamed to `deviceModel` / `problemDescription` to match the
+ * Phase 1 spec, and all new fields required for full customer management have
+ * been added below.
  */
 data class Repair(
     @get:PropertyName("id") @set:PropertyName("id")
@@ -28,11 +33,11 @@ data class Repair(
     @get:PropertyName("phoneNumber") @set:PropertyName("phoneNumber")
     var phoneNumber: String = "",
 
-    @get:PropertyName("deviceName") @set:PropertyName("deviceName")
-    var deviceName: String = "",
+    @get:PropertyName("deviceModel") @set:PropertyName("deviceModel")
+    var deviceModel: String = "",
 
-    @get:PropertyName("problem") @set:PropertyName("problem")
-    var problem: String = "",
+    @get:PropertyName("problemDescription") @set:PropertyName("problemDescription")
+    var problemDescription: String = "",
 
     @get:PropertyName("expectedDeliveryDate") @set:PropertyName("expectedDeliveryDate")
     var expectedDeliveryDate: String = "",
@@ -40,8 +45,48 @@ data class Repair(
     @get:PropertyName("paymentInfo") @set:PropertyName("paymentInfo")
     var paymentInfo: String = "",
 
+    @get:PropertyName("additionalDetails") @set:PropertyName("additionalDetails")
+    var additionalDetails: String = "",
+
+    @get:PropertyName("boxNumber") @set:PropertyName("boxNumber")
+    var boxNumber: String = "",
+
     @get:PropertyName("status") @set:PropertyName("status")
     var status: String = RepairStatus.PENDING,
+
+    @get:PropertyName("securityType") @set:PropertyName("securityType")
+    var securityType: String = SecurityType.NONE,
+
+    @get:PropertyName("password") @set:PropertyName("password")
+    var password: String = "",
+
+    @get:PropertyName("pattern") @set:PropertyName("pattern")
+    var pattern: String = "",
+
+    @get:PropertyName("batteryIncluded") @set:PropertyName("batteryIncluded")
+    var batteryIncluded: Boolean = false,
+
+    @get:PropertyName("simIncluded") @set:PropertyName("simIncluded")
+    var simIncluded: Boolean = false,
+
+    @get:PropertyName("memoryCardIncluded") @set:PropertyName("memoryCardIncluded")
+    var memoryCardIncluded: Boolean = false,
+
+    @get:PropertyName("simTrayIncluded") @set:PropertyName("simTrayIncluded")
+    var simTrayIncluded: Boolean = false,
+
+    @get:PropertyName("backCoverIncluded") @set:PropertyName("backCoverIncluded")
+    var backCoverIncluded: Boolean = false,
+
+    @get:PropertyName("deadPhonePermission") @set:PropertyName("deadPhonePermission")
+    var deadPhonePermission: Boolean = false,
+
+    // Counts only - actual media capture/storage is implemented in a later phase.
+    @get:PropertyName("photoCount") @set:PropertyName("photoCount")
+    var photoCount: Int = 0,
+
+    @get:PropertyName("videoCount") @set:PropertyName("videoCount")
+    var videoCount: Int = 0,
 
     @ServerTimestamp
     @get:PropertyName("createdAt") @set:PropertyName("createdAt")
@@ -65,6 +110,20 @@ object RepairStatus {
     const val COMPLETED = "Completed"
     const val DELIVERED = "Delivered"
     const val CANCELLED = "Cancelled"
+
+    val ALL = listOf(PENDING, IN_PROGRESS, COMPLETED, DELIVERED, CANCELLED)
+}
+
+/**
+ * Lock-screen security type on the device being repaired.
+ */
+object SecurityType {
+    const val NONE = "None"
+    const val PASSWORD = "Password"
+    const val PATTERN = "Pattern"
+    const val BOTH = "Password & Pattern"
+
+    val ALL = listOf(NONE, PASSWORD, PATTERN, BOTH)
 }
 
 /**

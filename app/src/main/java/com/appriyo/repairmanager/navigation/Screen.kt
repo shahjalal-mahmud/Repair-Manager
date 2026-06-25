@@ -18,4 +18,7 @@ sealed class Screen(val route: String) {
     object EditRepair : Screen("edit_repair/{repairId}") {
         fun passId(repairId: String) = "edit_repair/$repairId"
     }
+
+    // SMS settings (new)
+    object SmsSettings : Screen("sms_settings")
 }

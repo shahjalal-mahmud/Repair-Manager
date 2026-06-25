@@ -4,6 +4,7 @@ package com.appriyo.repairmanager.data.repository
 import com.appriyo.repairmanager.data.model.FirestorePaths
 import com.appriyo.repairmanager.data.model.Repair
 import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
@@ -28,6 +29,9 @@ import java.util.Locale
  *
  * Realtime sync across devices is provided by [observeRepairs] and [observeRepair], which
  * wrap Firestore snapshot listeners as cold [Flow]s. No extra collections or polling are used.
+ *
+ * [observeRepairChanges] was added for the SMS auto-send feature only - it is not used by
+ * any existing screen and does not change behavior of anything above it.
  */
 class RepairRepository(
     private val firestore: FirebaseFirestore
@@ -301,6 +305,31 @@ class RepairRepository(
                     return@addSnapshotListener
                 }
                 trySend(snapshot?.toObject(Repair::class.java))
+            }
+
+        awaitClose { registration.remove() }
+    }
+
+    /**
+     * Realtime stream of repair documents that were newly ADDED or MODIFIED since the
+     * listener started - used exclusively by the SMS auto-send system so it only ever
+     * re-evaluates repairs that actually changed, instead of re-scanning the whole
+     * collection on every snapshot. Does not affect [observeRepairs] or any other caller.
+     */
+    fun observeRepairChanges(): Flow<List<Repair>> = callbackFlow {
+        val registration: ListenerRegistration = repairsCollection
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val changed = snapshot?.documentChanges
+                    ?.filter { it.type == DocumentChange.Type.ADDED || it.type == DocumentChange.Type.MODIFIED }
+                    ?.mapNotNull { it.document.toObject(Repair::class.java) }
+                    ?: emptyList()
+                if (changed.isNotEmpty()) {
+                    trySend(changed)
+                }
             }
 
         awaitClose { registration.remove() }

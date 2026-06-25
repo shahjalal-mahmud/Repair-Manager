@@ -15,6 +15,7 @@ import com.appriyo.repairmanager.presentation.screens.EditRepairScreen
 import com.appriyo.repairmanager.presentation.screens.EmployeeScreen
 import com.appriyo.repairmanager.presentation.screens.LoginScreen
 import com.appriyo.repairmanager.presentation.screens.NotesScreen
+import com.appriyo.repairmanager.presentation.screens.SmsSettingsScreen
 
 @Composable
 fun NavGraph(
@@ -64,6 +65,11 @@ fun NavGraph(
         ) { backStackEntry ->
             val repairId = backStackEntry.arguments?.getString("repairId") ?: ""
             EditRepairScreen(navController, repairId)
+        }
+
+        // SMS settings (new)
+        composable(Screen.SmsSettings.route) {
+            SmsSettingsScreen()
         }
     }
 }

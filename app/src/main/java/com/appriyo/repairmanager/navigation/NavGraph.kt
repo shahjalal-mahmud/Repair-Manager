@@ -1,3 +1,4 @@
+// app/src/main/java/com/appriyo/repairmanager/navigation/NavGraph.kt
 package com.appriyo.repairmanager.navigation
 
 import androidx.compose.runtime.Composable
@@ -10,9 +11,10 @@ import androidx.navigation.navArgument
 import com.appriyo.repairmanager.presentation.screens.AddRepairScreen
 import com.appriyo.repairmanager.presentation.screens.CustomerDetailsScreen
 import com.appriyo.repairmanager.presentation.screens.CustomerListScreen
-import com.appriyo.repairmanager.presentation.screens.DashboardScreen
 import com.appriyo.repairmanager.presentation.screens.EditRepairScreen
+import com.appriyo.repairmanager.presentation.screens.EmployeeScreen
 import com.appriyo.repairmanager.presentation.screens.LoginScreen
+import com.appriyo.repairmanager.presentation.screens.NotesScreen
 
 @Composable
 fun NavGraph(
@@ -26,14 +28,12 @@ fun NavGraph(
         startDestination = startDestination,
         modifier = modifier
     ) {
+        // Auth screen (no bottom nav)
         composable(Screen.Login.route) {
             LoginScreen(navController)
         }
 
-        composable(Screen.Dashboard.route) {
-            DashboardScreen(navController)
-        }
-
+        // Bottom Navigation Screens
         composable(Screen.AddRepair.route) {
             AddRepairScreen(navController)
         }
@@ -42,6 +42,15 @@ fun NavGraph(
             CustomerListScreen(navController)
         }
 
+        composable(Screen.Notes.route) {
+            NotesScreen()
+        }
+
+        composable(Screen.Employee.route) {
+            EmployeeScreen()
+        }
+
+        // Detail screens (no bottom nav)
         composable(
             route = Screen.CustomerDetails.route,
             arguments = listOf(navArgument("repairId") { type = NavType.StringType })

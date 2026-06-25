@@ -348,7 +348,7 @@ updatedAt
 
 Purpose:
 
-Invoice header data.
+Invoice header data. (In the firestore i will manually input all the store details)
 
 ---
 

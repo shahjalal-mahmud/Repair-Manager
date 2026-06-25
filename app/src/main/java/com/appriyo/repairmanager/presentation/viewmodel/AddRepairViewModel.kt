@@ -1,4 +1,3 @@
-// app/src/main/java/com/appriyo/repairmanager/presentation/viewmodel/AddRepairViewModel.kt
 package com.appriyo.repairmanager.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
@@ -11,15 +10,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/**
- * ViewModel for the AddRepairScreen.
- *
- * Per Phase 1 spec, only Customer Name and Phone Number are required;
- * everything else (device info, accessories, security info, etc.) is optional.
- */
 class AddRepairViewModel(
     private val repairRepository: RepairRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val printViewModel: PrintViewModel
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AddRepairUiState())
@@ -42,7 +36,8 @@ class AddRepairViewModel(
         memoryCardIncluded: Boolean,
         simTrayIncluded: Boolean,
         backCoverIncluded: Boolean,
-        deadPhonePermission: Boolean
+        deadPhonePermission: Boolean,
+        shouldPrint: Boolean = true
     ) {
         val errors = validateFields(customerName, phoneNumber)
 
@@ -103,6 +98,11 @@ class AddRepairViewModel(
                         errorMessage = null,
                         generatedSerialNumber = repair.serialNumber
                     )
+
+                    // Print if requested
+                    if (shouldPrint) {
+                        printViewModel.printRepair(repair)
+                    }
                 },
                 onFailure = { exception ->
                     _uiState.value = _uiState.value.copy(
@@ -116,10 +116,6 @@ class AddRepairViewModel(
         }
     }
 
-    /**
-     * Resets the success/error flags. Call after the UI has reacted to a
-     * success or error event to avoid re-triggering the same one-time event on recomposition.
-     */
     fun consumeOneTimeEvents() {
         _uiState.value = _uiState.value.copy(
             isSuccess = false,

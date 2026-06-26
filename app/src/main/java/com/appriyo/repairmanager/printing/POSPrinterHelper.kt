@@ -85,6 +85,7 @@ class POSPrinterHelper(private val context: Context) {
         } else true
     }
 
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private fun findPrinterDevice(): BluetoothDevice? {
         return bluetoothAdapter?.bondedDevices?.firstOrNull { device ->
             val name = device.name ?: return@firstOrNull false
@@ -140,8 +141,6 @@ class POSPrinterHelper(private val context: Context) {
             false
         }
     }
-
-    fun isConnected(): Boolean = bluetoothSocket?.isConnected == true
 
     fun disconnect() {
         try { outputStream?.close() } catch (_: IOException) {}

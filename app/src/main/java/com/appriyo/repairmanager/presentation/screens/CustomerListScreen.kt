@@ -1,8 +1,11 @@
 // app/src/main/java/com/appriyo/repairmanager/presentation/screens/CustomerListScreen.kt
 package com.appriyo.repairmanager.presentation.screens
 
+import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,7 +55,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -83,7 +88,7 @@ fun CustomerListScreen(
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { /* user can just tap Print again */ }
+    ) { }
 
     LaunchedEffect(printUiState.missingPermissions) {
         if (printUiState.missingPermissions.isNotEmpty()) {
@@ -93,15 +98,15 @@ fun CustomerListScreen(
     }
 
     LaunchedEffect(printUiState.successMessage) {
-        printUiState.successMessage?.let { message ->
-            coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+        printUiState.successMessage?.let {
+            coroutineScope.launch { snackbarHostState.showSnackbar(it) }
             printViewModel.consumeSuccess()
         }
     }
 
     LaunchedEffect(printUiState.errorMessage) {
-        printUiState.errorMessage?.let { message ->
-            coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+        printUiState.errorMessage?.let {
+            coroutineScope.launch { snackbarHostState.showSnackbar(it) }
             printViewModel.consumeError()
         }
     }
@@ -156,6 +161,8 @@ fun CustomerListScreen(
                         items(uiState.filteredRepairs, key = { it.id }) { repair ->
                             RepairCard(
                                 repair = repair,
+                                // Pass the already-loaded thumbnail (may be null)
+                                thumbnail = uiState.thumbnails[repair.id],
                                 onClick = {
                                     navController.navigate(Screen.CustomerDetails.passId(repair.id))
                                 },
@@ -163,7 +170,11 @@ fun CustomerListScreen(
                                     viewModel.updateStatus(repair.id, newStatus)
                                 },
                                 onSendSms = {
-                                    openSmsComposer(context, repair.phoneNumber, buildStatusUpdateSms(repair))
+                                    openSmsComposer(
+                                        context,
+                                        repair.phoneNumber,
+                                        buildStatusUpdateSms(repair)
+                                    )
                                 },
                                 onPrint = { printViewModel.printRepair(repair) },
                                 onEdit = {
@@ -194,7 +205,8 @@ private fun EmptyState(isSearching: Boolean) {
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = if (isSearching) "No repairs match your search." else "No repair records yet.",
+                text = if (isSearching) "No repairs match your search."
+                else "No repair records yet.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -213,6 +225,7 @@ private fun EmptyState(isSearching: Boolean) {
 @Composable
 fun RepairCard(
     repair: Repair,
+    thumbnail: Bitmap?,          // ← new: null = no photo
     onClick: () -> Unit,
     onStatusSelected: (String) -> Unit,
     onSendSms: () -> Unit,
@@ -222,7 +235,9 @@ fun RepairCard(
 ) {
     Card(
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
         elevation = CardDefaults.cardElevation(0.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -230,7 +245,22 @@ fun RepairCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
 
-            // Header: invoice serial + status
+            // ── Thumbnail (only when a photo exists) ──────────────────────
+            if (thumbnail != null) {
+                Image(
+                    bitmap = thumbnail.asImageBitmap(),
+                    contentDescription = "Device photo",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // ── Header: serial + status ───────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -290,7 +320,10 @@ fun RepairCard(
                 }
                 FilledTonalIconButton(onClick = onPrint, enabled = !isPrinting) {
                     if (isPrinting) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
                     } else {
                         Icon(Icons.Filled.Print, contentDescription = "Print invoice")
                     }
@@ -304,7 +337,11 @@ fun RepairCard(
 }
 
 @Composable
-private fun InfoRow(icon: ImageVector, text: String, maxLines: Int = 1) {
+private fun InfoRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    maxLines: Int = 1
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
             icon,

@@ -1,8 +1,11 @@
 // app/src/main/java/com/appriyo/repairmanager/presentation/screens/CustomerDetailsScreen.kt
 package com.appriyo.repairmanager.presentation.screens
 
+import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +17,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -24,6 +29,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Sms
@@ -56,11 +63,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.appriyo.repairmanager.data.media.MediaAttachment
+import com.appriyo.repairmanager.data.media.MediaType
+import com.appriyo.repairmanager.data.media.loadMediaThumbnail
 import com.appriyo.repairmanager.navigation.Screen
 import com.appriyo.repairmanager.presentation.components.SectionCard
 import com.appriyo.repairmanager.presentation.components.StatusChip
@@ -88,11 +102,9 @@ fun CustomerDetailsScreen(
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { /* user can retry Print */ }
+    ) { }
 
-    LaunchedEffect(repairId) {
-        viewModel.loadRepair(repairId)
-    }
+    LaunchedEffect(repairId) { viewModel.loadRepair(repairId) }
 
     LaunchedEffect(uiState.isDeleted) {
         if (uiState.isDeleted) {
@@ -103,9 +115,9 @@ fun CustomerDetailsScreen(
     }
 
     LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let { message ->
+        uiState.errorMessage?.let {
             coroutineScope.launch {
-                snackbarHostState.showSnackbar(message)
+                snackbarHostState.showSnackbar(it)
                 viewModel.consumeError()
             }
         }
@@ -119,15 +131,15 @@ fun CustomerDetailsScreen(
     }
 
     LaunchedEffect(printUiState.successMessage) {
-        printUiState.successMessage?.let { message ->
-            coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+        printUiState.successMessage?.let {
+            coroutineScope.launch { snackbarHostState.showSnackbar(it) }
             printViewModel.consumeSuccess()
         }
     }
 
     LaunchedEffect(printUiState.errorMessage) {
-        printUiState.errorMessage?.let { message ->
-            coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+        printUiState.errorMessage?.let {
+            coroutineScope.launch { snackbarHostState.showSnackbar(it) }
             printViewModel.consumeError()
         }
     }
@@ -136,7 +148,12 @@ fun CustomerDetailsScreen(
         AlertDialog(
             onDismissRequest = { showDeleteConfirmation = false },
             title = { Text("Delete repair record?") },
-            text = { Text("This will permanently delete this customer's repair record. This action cannot be undone.") },
+            text = {
+                Text(
+                    "This will permanently delete this customer's repair record. " +
+                            "This action cannot be undone."
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirmation = false
@@ -169,14 +186,16 @@ fun CustomerDetailsScreen(
         ) {
             when {
                 uiState.isLoading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
                 }
 
                 uiState.repair == null -> {
                     Column(
-                        modifier = Modifier.fillMaxSize().padding(24.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
@@ -196,10 +215,12 @@ fun CustomerDetailsScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
 
-                        // Header card: serial, status, customer, quick actions
+                        // ── Header card ───────────────────────────────────
                         Card(
                             shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            ),
                             elevation = CardDefaults.cardElevation(0.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -218,7 +239,9 @@ fun CustomerDetailsScreen(
                                     StatusChip(
                                         status = repair.status,
                                         enabled = !uiState.isUpdatingStatus,
-                                        onStatusSelected = { newStatus -> viewModel.updateStatus(repairId, newStatus) }
+                                        onStatusSelected = { newStatus ->
+                                            viewModel.updateStatus(repairId, newStatus)
+                                        }
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(6.dp))
@@ -242,14 +265,17 @@ fun CustomerDetailsScreen(
                                     Surface(
                                         shape = RoundedCornerShape(12.dp),
                                         color = MaterialTheme.colorScheme.surface,
-                                        modifier = Modifier
-                                            .weight(1f)
+                                        modifier = Modifier.weight(1f)
                                     ) {
                                         QuickAction(
                                             icon = Icons.Filled.Sms,
                                             label = "SMS",
                                             onClick = {
-                                                openSmsComposer(context, repair.phoneNumber, buildStatusUpdateSms(repair))
+                                                openSmsComposer(
+                                                    context,
+                                                    repair.phoneNumber,
+                                                    buildStatusUpdateSms(repair)
+                                                )
                                             }
                                         )
                                     }
@@ -273,13 +299,26 @@ fun CustomerDetailsScreen(
                                         QuickAction(
                                             icon = Icons.Filled.Edit,
                                             label = "Edit",
-                                            onClick = { navController.navigate(Screen.EditRepair.passId(repair.id)) }
+                                            onClick = {
+                                                navController.navigate(
+                                                    Screen.EditRepair.passId(repair.id)
+                                                )
+                                            }
                                         )
                                     }
                                 }
                             }
                         }
 
+                        // ── Media gallery (all photos + videos) ──────────
+                        if (uiState.attachments.isNotEmpty() || uiState.isLoadingMedia) {
+                            MediaGallerySection(
+                                attachments = uiState.attachments,
+                                isLoading = uiState.isLoadingMedia
+                            )
+                        }
+
+                        // ── Detail sections ───────────────────────────────
                         SectionCard(title = "Device & issue", icon = Icons.Filled.Smartphone) {
                             DetailRow("Device model", repair.deviceModel.ifBlank { "-" })
                             DetailRow("Problem", repair.problemDescription.ifBlank { "-" })
@@ -305,7 +344,10 @@ fun CustomerDetailsScreen(
                             )
                         }
 
-                        SectionCard(title = "Accessories received", icon = Icons.Filled.Inventory2) {
+                        SectionCard(
+                            title = "Accessories received",
+                            icon = Icons.Filled.Inventory2
+                        ) {
                             DetailRow("Battery", yesNo(repair.batteryIncluded))
                             DetailRow("SIM", yesNo(repair.simIncluded))
                             DetailRow("Memory card", yesNo(repair.memoryCardIncluded))
@@ -320,9 +362,15 @@ fun CustomerDetailsScreen(
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme.colorScheme.error
                             ),
-                            modifier = Modifier.fillMaxWidth().height(50.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
                         ) {
-                            Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Delete repair")
                         }
@@ -335,6 +383,74 @@ fun CustomerDetailsScreen(
     }
 }
 
+// ── Media gallery ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun MediaGallerySection(
+    attachments: List<MediaAttachment>,
+    isLoading: Boolean
+) {
+    SectionCard(title = "Photos & Videos", icon = Icons.Filled.PhotoLibrary) {
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+            }
+        } else {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(attachments, key = { it.uri.toString() }) { attachment ->
+                    GalleryTile(attachment)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GalleryTile(attachment: MediaAttachment) {
+    val context = LocalContext.current
+    var thumbnail by remember(attachment.uri) { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(attachment.uri) {
+        thumbnail = loadMediaThumbnail(context, attachment.uri)
+    }
+
+    Box(
+        modifier = Modifier
+            .size(100.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        val bmp = thumbnail
+        if (bmp != null) {
+            Image(
+                bitmap = bmp.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        }
+
+        if (attachment.type == MediaType.VIDEO) {
+            Icon(
+                Icons.Filled.PlayCircle,
+                contentDescription = "Video",
+                tint = Color.White,
+                modifier = Modifier.size(30.dp)
+            )
+        }
+    }
+}
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
 @Composable
 private fun QuickAction(
     icon: ImageVector,
@@ -343,13 +459,7 @@ private fun QuickAction(
     onClick: () -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .padding(vertical = 10.dp)
-            .then(
-                if (enabled) Modifier.then(
-                    Modifier
-                ) else Modifier
-            ),
+        modifier = Modifier.padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         IconButton(onClick = onClick, enabled = enabled) {
@@ -363,16 +473,17 @@ private fun yesNo(value: Boolean) = if (value) "Yes" else "No"
 
 @Composable
 fun DetailRow(label: String, value: String) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+    ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium
-        )
+        Text(text = value, style = MaterialTheme.typography.bodyMedium)
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 }

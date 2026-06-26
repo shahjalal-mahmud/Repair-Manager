@@ -7,7 +7,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -65,6 +64,7 @@ import androidx.navigation.NavHostController
 import com.appriyo.repairmanager.data.model.SecurityType
 import com.appriyo.repairmanager.presentation.components.LabeledCheckbox
 import com.appriyo.repairmanager.presentation.components.OptionDropdown
+import com.appriyo.repairmanager.presentation.components.SectionCard
 import com.appriyo.repairmanager.presentation.viewmodel.AddRepairViewModel
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
@@ -282,7 +282,7 @@ fun AddRepairScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
 
-            SectionCard(title = "Customer", icon = Icons.Filled.Person) {
+            SectionCard (title = "Customer", icon = Icons.Filled.Person) {
                 OutlinedTextField(
                     value = customerName,
                     onValueChange = { customerName = it },
@@ -460,39 +460,6 @@ fun AddRepairScreen(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-        }
-    }
-}
-
-@Composable
-private fun SectionCard(
-    title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        elevation = CardDefaults.cardElevation(0.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            content()
         }
     }
 }

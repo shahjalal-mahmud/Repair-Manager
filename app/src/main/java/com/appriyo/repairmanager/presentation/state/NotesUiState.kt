@@ -2,6 +2,7 @@
 package com.appriyo.repairmanager.presentation.state
 
 import com.appriyo.repairmanager.data.model.Note
+import com.appriyo.repairmanager.presentation.components.ToastMessage
 
 data class NotesUiState(
     val notes: List<Note> = emptyList(),
@@ -11,5 +12,8 @@ data class NotesUiState(
     val errorMessage: String? = null,
     val isDialogOpen: Boolean = false,
     val editingNote: Note? = null,
-    val titleError: String? = null
+    val titleError: String? = null,
+    val noteToDelete: Note? = null,
+    val isDeleting: Boolean = false,
+    val toast: ToastMessage? = null
 )

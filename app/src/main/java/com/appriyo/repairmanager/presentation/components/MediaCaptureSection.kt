@@ -44,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +60,7 @@ import com.appriyo.repairmanager.data.media.MediaStorageManager
 import com.appriyo.repairmanager.data.media.MediaType
 import com.appriyo.repairmanager.data.media.loadMediaThumbnail
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * Lets the user attach photos and videos to a repair via camera or gallery.
@@ -90,28 +92,45 @@ fun MediaCaptureSection(
     var showPhotoMenu by remember { mutableStateOf(false) }
     var showVideoMenu by remember { mutableStateOf(false) }
 
+    var pendingCapturePath by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingCaptureIsVideo by rememberSaveable { mutableStateOf(false) }
+
+    fun clearPendingCapture() {
+        pendingCapturePath = null
+    }
+
     fun toast(message: String) = Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 
     val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        val uri = pendingCaptureUri
-        if (success && uri != null) {
-            manager.finalize(uri, isVideo = false)
-            onAdd(MediaAttachment(uri, MediaType.PHOTO))
-        } else if (uri != null) {
-            manager.delete(uri)
+        val path = pendingCapturePath
+        val file = path?.let { File(it) }
+        if (success && file != null) {
+            val savedUri = manager.commitCapturedMedia(file, isVideo = false, draftId = draftId)
+            if (savedUri != null) {
+                onAdd(MediaAttachment(savedUri, MediaType.PHOTO))
+            } else {
+                toast("Could not save the photo. Please try again.")
+            }
+        } else if (file != null) {
+            manager.discardTempFile(file)
         }
-        pendingCaptureUri = null
+        clearPendingCapture()
     }
 
     val captureVideoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()) { success ->
-        val uri = pendingCaptureUri
-        if (success && uri != null) {
-            manager.finalize(uri, isVideo = true)
-            onAdd(MediaAttachment(uri, MediaType.VIDEO))
-        } else if (uri != null) {
-            manager.delete(uri)
+        val path = pendingCapturePath
+        val file = path?.let { File(it) }
+        if (success && file != null) {
+            val savedUri = manager.commitCapturedMedia(file, isVideo = true, draftId = draftId)
+            if (savedUri != null) {
+                onAdd(MediaAttachment(savedUri, MediaType.VIDEO))
+            } else {
+                toast("Could not save the video. Please try again.")
+            }
+        } else if (file != null) {
+            manager.discardTempFile(file)
         }
-        pendingCaptureUri = null
+        clearPendingCapture()
     }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -162,16 +181,20 @@ fun MediaCaptureSection(
     }
 
     fun launchCameraForPhoto() {
-        val uri = manager.createImageCaptureUri(draftId)
-        if (uri == null) { toast("Could not prepare storage for the photo."); return }
-        pendingCaptureUri = uri
+        val file = manager.createTempCaptureFile(isVideo = false, draftId = draftId)
+        val uri = runCatching { manager.uriForCaptureFile(file) }.getOrNull()
+        if (uri == null) { toast("Could not prepare the camera."); return }
+        pendingCapturePath = file.absolutePath
+        pendingCaptureIsVideo = false
         takePictureLauncher.launch(uri)
     }
 
     fun launchCameraForVideo() {
-        val uri = manager.createVideoCaptureUri(draftId)
-        if (uri == null) { toast("Could not prepare storage for the video."); return }
-        pendingCaptureUri = uri
+        val file = manager.createTempCaptureFile(isVideo = true, draftId = draftId)
+        val uri = runCatching { manager.uriForCaptureFile(file) }.getOrNull()
+        if (uri == null) { toast("Could not prepare the camera."); return }
+        pendingCapturePath = file.absolutePath
+        pendingCaptureIsVideo = true
         captureVideoLauncher.launch(uri)
     }
 

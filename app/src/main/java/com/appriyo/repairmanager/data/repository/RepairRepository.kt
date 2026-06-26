@@ -1,7 +1,4 @@
-// ============================================================================
-// REPAIR REPOSITORY
-// ============================================================================
-
+// app/src/main/java/com/appriyo/repairmanager/data/repository/RepairRepository.kt
 package com.appriyo.repairmanager.data.repository
 
 import com.appriyo.repairmanager.data.model.FirestorePaths
@@ -80,6 +77,9 @@ class RepairRepository(
      * @param deadPhonePermission Permission to work on dead phone
      * @param status Initial repair status
      * @param createdBy User identifier who created this record
+     * @param draftId Draft identifier for media attachments (optional)
+     * @param photoCount Number of photos attached (default: 0)
+     * @param videoCount Number of videos attached (default: 0)
      * @return Result containing the created Repair object or an error
      */
     suspend fun createRepair(
@@ -101,7 +101,10 @@ class RepairRepository(
         backCoverIncluded: Boolean,
         deadPhonePermission: Boolean,
         status: String,
-        createdBy: String
+        createdBy: String,
+        draftId: String = "",
+        photoCount: Int = 0,
+        videoCount: Int = 0
     ): Result<Repair> = runCatching {
         val newRepairRef = repairsCollection.document()
 
@@ -138,8 +141,9 @@ class RepairRepository(
                 "simTrayIncluded" to simTrayIncluded,
                 "backCoverIncluded" to backCoverIncluded,
                 "deadPhonePermission" to deadPhonePermission,
-                "photoCount" to 0,
-                "videoCount" to 0,
+                "draftId" to draftId,
+                "photoCount" to photoCount,
+                "videoCount" to videoCount,
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp(),
                 "createdBy" to createdBy
@@ -170,8 +174,9 @@ class RepairRepository(
             simTrayIncluded = simTrayIncluded,
             backCoverIncluded = backCoverIncluded,
             deadPhonePermission = deadPhonePermission,
-            photoCount = 0,
-            videoCount = 0,
+            draftId = draftId,
+            photoCount = photoCount,
+            videoCount = videoCount,
             createdAt = null,
             updatedAt = null,
             createdBy = createdBy
@@ -205,6 +210,9 @@ class RepairRepository(
      * @param backCoverIncluded Updated back cover inclusion status
      * @param deadPhonePermission Updated dead phone permission
      * @param status Updated status
+     * @param draftId Updated draft identifier (optional)
+     * @param photoCount Updated photo count (optional)
+     * @param videoCount Updated video count (optional)
      * @return Result indicating success or failure
      */
     suspend fun updateRepair(
@@ -226,7 +234,10 @@ class RepairRepository(
         simTrayIncluded: Boolean,
         backCoverIncluded: Boolean,
         deadPhonePermission: Boolean,
-        status: String
+        status: String,
+        draftId: String? = null,
+        photoCount: Int? = null,
+        videoCount: Int? = null
     ): Result<Unit> = runCatching {
         val updates = hashMapOf<String, Any?>(
             "customerName" to customerName,
@@ -250,6 +261,11 @@ class RepairRepository(
             "updatedAt" to FieldValue.serverTimestamp()
         )
 
+        // Add optional fields if provided
+        draftId?.let { updates["draftId"] = it }
+        photoCount?.let { updates["photoCount"] = it }
+        videoCount?.let { updates["videoCount"] = it }
+
         repairsCollection.document(repairId).update(updates).await()
         Result.success(Unit)
     }.fold(
@@ -271,6 +287,32 @@ class RepairRepository(
         repairsCollection.document(repairId).update(
             mapOf(
                 "status" to newStatus,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+        Result.success(Unit)
+    }.fold(
+        onSuccess = { it },
+        onFailure = { handleException(it) }
+    )
+
+    /**
+     * Updates the media counts for a repair record.
+     *
+     * @param repairId The ID of the repair to update
+     * @param photoCount New photo count
+     * @param videoCount New video count
+     * @return Result indicating success or failure
+     */
+    suspend fun updateMediaCounts(
+        repairId: String,
+        photoCount: Int,
+        videoCount: Int
+    ): Result<Unit> = runCatching {
+        repairsCollection.document(repairId).update(
+            mapOf(
+                "photoCount" to photoCount,
+                "videoCount" to videoCount,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
         ).await()

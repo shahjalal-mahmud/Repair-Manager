@@ -9,6 +9,7 @@ import com.appriyo.repairmanager.data.repository.RepairRepository
 import com.appriyo.repairmanager.presentation.state.AddRepairUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class AddRepairViewModel(
@@ -23,13 +24,15 @@ class AddRepairViewModel(
     init {
         viewModelScope.launch {
             printViewModel.uiState.collect { printState ->
-                _uiState.value = _uiState.value.copy(
-                    printSuccess = if (printState.successMessage != null) true
-                    else if (printState.errorMessage != null) false
-                    else _uiState.value.printSuccess,
-                    printErrorMessage = printState.errorMessage,
-                    missingPermissions = printState.missingPermissions
-                )
+                _uiState.update { state ->
+                    state.copy(
+                        printSuccess = if (printState.successMessage != null) true
+                        else if (printState.errorMessage != null) false
+                        else state.printSuccess,
+                        printErrorMessage = printState.errorMessage,
+                        missingPermissions = printState.missingPermissions
+                    )
+                }
                 if (printState.successMessage != null) printViewModel.consumeSuccess()
                 if (printState.errorMessage != null) printViewModel.consumeError()
             }
@@ -54,9 +57,9 @@ class AddRepairViewModel(
         simTrayIncluded: Boolean,
         backCoverIncluded: Boolean,
         deadPhonePermission: Boolean,
-        draftId: String,           // ← new
-        photoCount: Int = 0,       // ← new
-        videoCount: Int = 0        // ← new
+        draftId: String = "",           // ← new with default
+        photoCount: Int = 0,            // ← new with default
+        videoCount: Int = 0             // ← new with default
     ) = saveRepair(
         customerName, phoneNumber, deviceModel, problemDescription,
         expectedDeliveryDate, paymentInfo, additionalDetails, boxNumber,
@@ -83,9 +86,9 @@ class AddRepairViewModel(
         simTrayIncluded: Boolean,
         backCoverIncluded: Boolean,
         deadPhonePermission: Boolean,
-        draftId: String,           // ← new
-        photoCount: Int = 0,       // ← new
-        videoCount: Int = 0        // ← new
+        draftId: String = "",           // ← new with default
+        photoCount: Int = 0,            // ← new with default
+        videoCount: Int = 0             // ← new with default
     ) = saveRepair(
         customerName, phoneNumber, deviceModel, problemDescription,
         expectedDeliveryDate, paymentInfo, additionalDetails, boxNumber,
@@ -119,30 +122,36 @@ class AddRepairViewModel(
     ) {
         val errors = validateFields(customerName, phoneNumber)
         if (errors.isNotEmpty()) {
-            _uiState.value = _uiState.value.copy(
-                fieldErrors = errors,
-                errorMessage = "Please fix the highlighted fields before saving.",
-                isSuccess = false
-            )
+            _uiState.update {
+                it.copy(
+                    fieldErrors = errors,
+                    errorMessage = "Please fix the highlighted fields before saving.",
+                    isSuccess = false
+                )
+            }
             return
         }
 
         val currentUserId = authRepository.getCurrentUser()?.uid.orEmpty()
         if (currentUserId.isEmpty()) {
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                isSuccess = false,
-                errorMessage = "You must be signed in to save a repair record."
-            )
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    isSuccess = false,
+                    errorMessage = "You must be signed in to save a repair record."
+                )
+            }
             return
         }
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isLoading = true,
-                errorMessage = null,
-                fieldErrors = emptyMap()
-            )
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    errorMessage = null,
+                    fieldErrors = emptyMap()
+                )
+            }
 
             val result = repairRepository.createRepair(
                 customerName = customerName.trim(),
@@ -171,42 +180,48 @@ class AddRepairViewModel(
 
             result.fold(
                 onSuccess = { repair ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        isSuccess = true,
-                        errorMessage = null,
-                        generatedSerialNumber = repair.serialNumber
-                    )
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isSuccess = true,
+                            errorMessage = null,
+                            generatedSerialNumber = repair.serialNumber
+                        )
+                    }
                     if (shouldPrint) printViewModel.printRepair(repair)
                 },
                 onFailure = { exception ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        isSuccess = false,
-                        errorMessage = exception.localizedMessage
-                            ?: "Failed to save repair record. Please try again."
-                    )
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isSuccess = false,
+                            errorMessage = exception.localizedMessage
+                                ?: "Failed to save repair record. Please try again."
+                        )
+                    }
                 }
             )
         }
     }
 
     fun consumeOneTimeEvents() {
-        _uiState.value = _uiState.value.copy(
-            isSuccess = false,
-            errorMessage = null,
-            printSuccess = null,
-            printErrorMessage = null,
-            fieldErrors = emptyMap()
-        )
+        _uiState.update {
+            it.copy(
+                isSuccess = false,
+                errorMessage = null,
+                printSuccess = null,
+                printErrorMessage = null,
+                fieldErrors = emptyMap()
+            )
+        }
     }
 
     fun consumePrintError() {
-        _uiState.value = _uiState.value.copy(printErrorMessage = null)
+        _uiState.update { it.copy(printErrorMessage = null) }
     }
 
     fun consumeMissingPermissions() {
-        _uiState.value = _uiState.value.copy(missingPermissions = emptyList())
+        _uiState.update { it.copy(missingPermissions = emptyList()) }
     }
 
     private fun validateFields(customerName: String, phoneNumber: String): Map<String, String> {

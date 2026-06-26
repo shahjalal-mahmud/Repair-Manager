@@ -1,6 +1,7 @@
 // app/src/main/java/com/appriyo/repairmanager/presentation/state/CustomerDetailsUiState.kt
 package com.appriyo.repairmanager.presentation.state
 
+import com.appriyo.repairmanager.data.media.MediaAttachment
 import com.appriyo.repairmanager.data.model.Repair
 
 data class CustomerDetailsUiState(
@@ -8,5 +9,7 @@ data class CustomerDetailsUiState(
     val repair: Repair? = null,
     val isDeleted: Boolean = false,
     val isUpdatingStatus: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val attachments: List<MediaAttachment> = emptyList(),   // ← new
+    val isLoadingMedia: Boolean = false                      // ← new
 )

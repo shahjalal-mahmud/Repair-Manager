@@ -9,25 +9,20 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
 import java.io.IOException
 import java.io.OutputStream
 import java.lang.reflect.Method
 import java.util.UUID
 
-/**
- * Handles Bluetooth SPP connection and raw ESC/POS text printing.
- * Hardcoded for a specific POS printer.
- */
 class POSPrinterHelper(private val context: Context) {
 
     companion object {
         private const val TAG = "POSPrinterHelper"
         private val SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
-        // HARDCODED PRINTER DETAILS - Change these to match your printer
-        const val PRINTER_NAME = "PT-210"  // Change to your printer name
-        const val PRINTER_ADDRESS = "00:11:22:33:44:55"  // Change to your printer MAC address
+        const val PRINTER_NAME = "PT-210_00D1"
     }
 
     private var bluetoothAdapter: BluetoothAdapter? = null
@@ -49,6 +44,7 @@ class POSPrinterHelper(private val context: Context) {
         }
     }
 
+    @RequiresPermission(allOf = [Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN])
     fun connectToPrinter(): Boolean {
         return try {
             if (!context.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)) {
@@ -62,29 +58,17 @@ class POSPrinterHelper(private val context: Context) {
                 return false
             }
 
-            // Check permissions
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
-                    != PackageManager.PERMISSION_GRANTED) {
-                    Log.e(TAG, "BLUETOOTH_CONNECT permission not granted")
-                    return false
-                }
-            }
-
-            // Find the hardcoded printer
-            val device = bluetoothAdapter?.bondedDevices?.firstOrNull {
-                it.address.equals(PRINTER_ADDRESS, ignoreCase = true)
-            } ?: run {
-                Log.e(TAG, "Printer not found: $PRINTER_ADDRESS")
+            if (!hasConnectPermission()) {
+                Log.e(TAG, "Bluetooth connect permission not granted")
                 return false
             }
 
-            // Try standard connection first, fallback to alternative
-            if (tryStandardConnection(device)) {
-                true
-            } else {
-                tryAlternativeConnection(device)
+            val device = findPrinterDevice() ?: run {
+                Log.e(TAG, "Printer not found among bonded devices: $PRINTER_NAME")
+                return false
             }
+
+            if (tryStandardConnection(device)) true else tryAlternativeConnection(device)
         } catch (e: SecurityException) {
             Log.e(TAG, "Bluetooth permission denied", e)
             false
@@ -94,6 +78,21 @@ class POSPrinterHelper(private val context: Context) {
         }
     }
 
+    private fun hasConnectPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) ==
+                    PackageManager.PERMISSION_GRANTED
+        } else true
+    }
+
+    private fun findPrinterDevice(): BluetoothDevice? {
+        return bluetoothAdapter?.bondedDevices?.firstOrNull { device ->
+            val name = device.name ?: return@firstOrNull false
+            name.equals(PRINTER_NAME, ignoreCase = true) || name.contains(PRINTER_NAME, ignoreCase = true)
+        }
+    }
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private fun tryStandardConnection(device: BluetoothDevice): Boolean {
         return try {
             bluetoothSocket = device.createRfcommSocketToServiceRecord(SPP_UUID)
@@ -111,11 +110,11 @@ class POSPrinterHelper(private val context: Context) {
         }
     }
 
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private fun tryAlternativeConnection(device: BluetoothDevice): Boolean {
         return try {
             val method: Method = device.javaClass.getMethod(
-                "createInsecureRfcommSocketToServiceRecord",
-                UUID::class.java
+                "createInsecureRfcommSocketToServiceRecord", UUID::class.java
             )
             bluetoothSocket = method.invoke(device, SPP_UUID) as BluetoothSocket
             bluetoothSocket?.connect()
@@ -145,18 +144,14 @@ class POSPrinterHelper(private val context: Context) {
     fun isConnected(): Boolean = bluetoothSocket?.isConnected == true
 
     fun disconnect() {
-        try {
-            outputStream?.close()
-        } catch (_: IOException) {}
+        try { outputStream?.close() } catch (_: IOException) {}
         safeCloseSocket()
         outputStream = null
         bluetoothSocket = null
     }
 
     private fun safeCloseSocket() {
-        try {
-            bluetoothSocket?.close()
-        } catch (_: IOException) {}
+        try { bluetoothSocket?.close() } catch (_: IOException) {}
         bluetoothSocket = null
     }
 }

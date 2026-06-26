@@ -235,10 +235,26 @@ fun AddRepairScreen(
                     Button(
                         onClick = {
                             viewModel.saveRepairOnly(
-                                customerName, phoneNumber, deviceModel, problemDescription,
-                                expectedDeliveryDate, paymentInfo, additionalDetails, boxNumber,
-                                securityType, password, pattern, batteryIncluded, simIncluded,
-                                memoryCardIncluded, simTrayIncluded, backCoverIncluded, deadPhonePermission
+                                customerName,
+                                phoneNumber,
+                                deviceModel,
+                                problemDescription,
+                                expectedDeliveryDate,
+                                paymentInfo,
+                                additionalDetails,
+                                boxNumber,
+                                securityType,
+                                password,
+                                pattern,
+                                batteryIncluded,
+                                simIncluded,
+                                memoryCardIncluded,
+                                simTrayIncluded,
+                                backCoverIncluded,
+                                deadPhonePermission,
+                                draftId = draftId,
+                                photoCount = mediaAttachments.count { it.type == MediaType.PHOTO },
+                                videoCount = mediaAttachments.count { it.type == MediaType.VIDEO }
                             )
                         },
                         enabled = !uiState.isLoading,
@@ -268,7 +284,10 @@ fun AddRepairScreen(
                                 customerName, phoneNumber, deviceModel, problemDescription,
                                 expectedDeliveryDate, paymentInfo, additionalDetails, boxNumber,
                                 securityType, password, pattern, batteryIncluded, simIncluded,
-                                memoryCardIncluded, simTrayIncluded, backCoverIncluded, deadPhonePermission
+                                memoryCardIncluded, simTrayIncluded, backCoverIncluded, deadPhonePermission,
+                                draftId = draftId,
+                                photoCount = mediaAttachments.count { it.type == MediaType.PHOTO },
+                                videoCount = mediaAttachments.count { it.type == MediaType.VIDEO }
                             )
                         },
                         enabled = !uiState.isLoading,

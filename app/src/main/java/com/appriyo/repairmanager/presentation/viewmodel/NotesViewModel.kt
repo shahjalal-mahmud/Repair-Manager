@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.appriyo.repairmanager.data.model.Note
 import com.appriyo.repairmanager.data.repository.AuthRepository
 import com.appriyo.repairmanager.data.repository.NotesRepository
+import com.appriyo.repairmanager.presentation.components.ToastMessage
+import com.appriyo.repairmanager.presentation.components.ToastType
 import com.appriyo.repairmanager.presentation.state.NotesUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -74,6 +76,7 @@ class NotesViewModel(
         }
 
         val editingNoteId = _uiState.value.editingNote?.id
+        val isEditing = editingNoteId != null
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSaving = true, errorMessage = null, titleError = null)
@@ -91,7 +94,8 @@ class NotesViewModel(
                         isSaving = false,
                         isDialogOpen = false,
                         editingNote = null,
-                        errorMessage = null
+                        errorMessage = null,
+                        toast = ToastMessage(if (isEditing) "Note updated" else "Note added")
                     )
                 },
                 onFailure = { exception ->
@@ -104,14 +108,42 @@ class NotesViewModel(
         }
     }
 
-    fun deleteNote(noteId: String) {
+    /** Step 1 of delete: open the confirmation dialog for this note. */
+    fun requestDeleteNote(note: Note) {
+        _uiState.value = _uiState.value.copy(noteToDelete = note)
+    }
+
+    /** User tapped Cancel on the confirmation dialog. */
+    fun dismissDeleteConfirmation() {
+        if (_uiState.value.isDeleting) return
+        _uiState.value = _uiState.value.copy(noteToDelete = null)
+    }
+
+    /** Step 2 of delete: user tapped OK/Delete on the confirmation dialog. */
+    fun confirmDeleteNote() {
+        val note = _uiState.value.noteToDelete ?: return
+
         viewModelScope.launch {
-            val result = notesRepository.deleteNote(noteId)
+            _uiState.value = _uiState.value.copy(isDeleting = true)
+
+            val result = notesRepository.deleteNote(note.id)
+
             result.fold(
-                onSuccess = { /* realtime listener refreshes the list automatically */ },
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(
+                        isDeleting = false,
+                        noteToDelete = null,
+                        toast = ToastMessage("Note deleted", ToastType.SUCCESS)
+                    )
+                },
                 onFailure = { exception ->
                     _uiState.value = _uiState.value.copy(
-                        errorMessage = exception.localizedMessage ?: "Failed to delete note. Please try again."
+                        isDeleting = false,
+                        noteToDelete = null,
+                        toast = ToastMessage(
+                            exception.localizedMessage ?: "Failed to delete note.",
+                            ToastType.ERROR
+                        )
                     )
                 }
             )
@@ -120,5 +152,9 @@ class NotesViewModel(
 
     fun consumeError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+
+    fun consumeToast() {
+        _uiState.value = _uiState.value.copy(toast = null)
     }
 }

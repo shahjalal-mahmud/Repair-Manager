@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Smartphone
@@ -55,6 +56,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +66,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.appriyo.repairmanager.data.media.MediaAttachment
+import com.appriyo.repairmanager.data.media.MediaType
 import com.appriyo.repairmanager.data.model.SecurityType
 import com.appriyo.repairmanager.presentation.components.OptionDropdown
 import com.appriyo.repairmanager.presentation.components.SectionCard
@@ -70,6 +75,10 @@ import com.appriyo.repairmanager.presentation.viewmodel.AddRepairViewModel
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import java.util.Calendar
+import java.util.UUID
+import kotlin.collections.flatMap
+import androidx.core.net.toUri
+import com.appriyo.repairmanager.presentation.components.MediaCaptureSection
 
 @SuppressLint("DefaultLocale")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -125,6 +134,17 @@ fun AddRepairScreen(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { /* user can retry Save & Print regardless of result */ }
 
+    val mediaAttachmentsSaver = listSaver<List<MediaAttachment>, String>(
+        save = { list -> list.flatMap { listOf(it.uri.toString(), it.type.name) } },
+        restore = { flat -> flat.chunked(2).map { (uriStr, typeName) ->
+            MediaAttachment(uriStr.toUri(), MediaType.valueOf(typeName))
+        } }
+    )
+    var mediaAttachments by rememberSaveable(stateSaver = mediaAttachmentsSaver) {
+        mutableStateOf(emptyList())
+    }
+    var draftId by remember { mutableStateOf(UUID.randomUUID().toString()) }
+
     LaunchedEffect(uiState.missingPermissions) {
         if (uiState.missingPermissions.isNotEmpty()) {
             permissionLauncher.launch(uiState.missingPermissions.toTypedArray())
@@ -150,6 +170,8 @@ fun AddRepairScreen(
         simTrayIncluded = false
         backCoverIncluded = false
         deadPhonePermission = false
+        mediaAttachments = emptyList()
+        draftId = UUID.randomUUID().toString()
     }
 
     LaunchedEffect(uiState.isSuccess) {
@@ -213,10 +235,26 @@ fun AddRepairScreen(
                     Button(
                         onClick = {
                             viewModel.saveRepairOnly(
-                                customerName, phoneNumber, deviceModel, problemDescription,
-                                expectedDeliveryDate, paymentInfo, additionalDetails, boxNumber,
-                                securityType, password, pattern, batteryIncluded, simIncluded,
-                                memoryCardIncluded, simTrayIncluded, backCoverIncluded, deadPhonePermission
+                                customerName,
+                                phoneNumber,
+                                deviceModel,
+                                problemDescription,
+                                expectedDeliveryDate,
+                                paymentInfo,
+                                additionalDetails,
+                                boxNumber,
+                                securityType,
+                                password,
+                                pattern,
+                                batteryIncluded,
+                                simIncluded,
+                                memoryCardIncluded,
+                                simTrayIncluded,
+                                backCoverIncluded,
+                                deadPhonePermission,
+                                draftId = draftId,
+                                photoCount = mediaAttachments.count { it.type == MediaType.PHOTO },
+                                videoCount = mediaAttachments.count { it.type == MediaType.VIDEO }
                             )
                         },
                         enabled = !uiState.isLoading,
@@ -246,7 +284,10 @@ fun AddRepairScreen(
                                 customerName, phoneNumber, deviceModel, problemDescription,
                                 expectedDeliveryDate, paymentInfo, additionalDetails, boxNumber,
                                 securityType, password, pattern, batteryIncluded, simIncluded,
-                                memoryCardIncluded, simTrayIncluded, backCoverIncluded, deadPhonePermission
+                                memoryCardIncluded, simTrayIncluded, backCoverIncluded, deadPhonePermission,
+                                draftId = draftId,
+                                photoCount = mediaAttachments.count { it.type == MediaType.PHOTO },
+                                videoCount = mediaAttachments.count { it.type == MediaType.VIDEO }
                             )
                         },
                         enabled = !uiState.isLoading,
@@ -376,6 +417,20 @@ fun AddRepairScreen(
                     maxLines = 3,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.isLoading
+                )
+            }
+
+            SectionCard(title = "Photos & Videos", icon = Icons.Filled.PhotoLibrary) {
+                MediaCaptureSection(
+                    attachments = mediaAttachments,
+                    onAdd = { mediaAttachments = mediaAttachments + it },
+                    onRemove = { item ->
+                        // physically delete the file on disk, then drop it from the list
+                        com.appriyo.repairmanager.data.media.MediaStorageManager(context).delete(item.uri)
+                        mediaAttachments = mediaAttachments - item
+                    },
+                    draftId = draftId,
                     enabled = !uiState.isLoading
                 )
             }

@@ -1,4 +1,7 @@
-// app/src/main/java/com/appriyo/repairmanager/data/model/Repair.kt
+// ============================================================================
+// REPAIR DATA MODEL
+// ============================================================================
+
 package com.appriyo.repairmanager.data.model
 
 import com.google.firebase.firestore.PropertyName
@@ -11,14 +14,38 @@ import java.util.Date
  * Collection: "repairs"
  * Document ID: Firestore auto-generated ID (mirrored into [id] for convenience)
  *
- * IMPORTANT: This class requires a no-argument constructor for Firestore's
- * automatic deserialization (toObject<Repair>()). All properties have default
- * values, which satisfies that requirement.
+ * **Important:** This class requires a no-argument constructor for Firestore's
+ * automatic deserialization via `toObject<Repair>()`. All properties have default
+ * values to satisfy this requirement.
  *
- * NOTE (Phase 1 migration): the original MVP used `deviceName` / `problem`.
- * These have been renamed to `deviceModel` / `problemDescription` to match the
- * Phase 1 spec, and all new fields required for full customer management have
- * been added below.
+ * **Migration Note:** Fields `deviceName` and `problem` have been renamed to
+ * `deviceModel` and `problemDescription` respectively to align with the Phase 1 spec.
+ *
+ * @property id Unique document identifier (mirrored from Firestore)
+ * @property serialNumber Human-readable sequential identifier (format: RM-XXXXXX)
+ * @property customerName Full name of the customer
+ * @property phoneNumber Contact phone number
+ * @property deviceModel Model of the device being repaired
+ * @property problemDescription Description of the reported issue
+ * @property expectedDeliveryDate Estimated completion date
+ * @property paymentInfo Payment method or transaction details
+ * @property additionalDetails Supplementary notes or instructions
+ * @property boxNumber Storage box identifier
+ * @property status Current repair status (see [RepairStatus])
+ * @property securityType Lock screen security type (see [SecurityType])
+ * @property password Device password (if applicable)
+ * @property pattern Device pattern lock (if applicable)
+ * @property batteryIncluded Whether battery was included with the device
+ * @property simIncluded Whether SIM card was included
+ * @property memoryCardIncluded Whether memory card was included
+ * @property simTrayIncluded Whether SIM tray was included
+ * @property backCoverIncluded Whether back cover was included
+ * @property deadPhonePermission Permission to work on a dead/non-responsive device
+ * @property photoCount Number of photos captured (future implementation)
+ * @property videoCount Number of videos captured (future implementation)
+ * @property createdAt Timestamp when the record was created (server timestamp)
+ * @property updatedAt Timestamp when the record was last updated (server timestamp)
+ * @property createdBy User identifier who created this record
  */
 data class Repair(
     @get:PropertyName("id") @set:PropertyName("id")
@@ -81,7 +108,6 @@ data class Repair(
     @get:PropertyName("deadPhonePermission") @set:PropertyName("deadPhonePermission")
     var deadPhonePermission: Boolean = false,
 
-    // Counts only - actual media capture/storage is implemented in a later phase.
     @get:PropertyName("photoCount") @set:PropertyName("photoCount")
     var photoCount: Int = 0,
 
@@ -100,9 +126,16 @@ data class Repair(
     var createdBy: String = ""
 )
 
+// ============================================================================
+// CONSTANTS & ENUMS
+// ============================================================================
+
 /**
- * Simple string-based status constants (kept intentionally simple,
- * no enums stored in Firestore to avoid serialization edge cases).
+ * Defines the possible statuses for a repair record.
+ *
+ * **Status Lifecycle:**
+ * PENDING → IN_PROGRESS → COMPLETED → DELIVERED
+ *                      ↘ CANCELLED
  */
 object RepairStatus {
     const val PENDING = "Pending"
@@ -115,7 +148,7 @@ object RepairStatus {
 }
 
 /**
- * Lock-screen security type on the device being repaired.
+ * Defines the possible security types for a locked device.
  */
 object SecurityType {
     const val NONE = "None"
@@ -127,7 +160,7 @@ object SecurityType {
 }
 
 /**
- * Firestore collection / document path constants used across the data layer.
+ * Firestore collection and document path constants.
  */
 object FirestorePaths {
     const val REPAIRS_COLLECTION = "repairs"

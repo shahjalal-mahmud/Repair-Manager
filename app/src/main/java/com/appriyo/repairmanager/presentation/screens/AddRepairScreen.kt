@@ -1,3 +1,4 @@
+// app/src/main/java/com/appriyo/repairmanager/presentation/screens/AddRepairScreen.kt
 package com.appriyo.repairmanager.presentation.screens
 
 import android.annotation.SuppressLint
@@ -20,8 +21,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Payments
@@ -29,13 +31,12 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Smartphone
-import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +45,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -62,7 +64,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.appriyo.repairmanager.data.model.SecurityType
-import com.appriyo.repairmanager.presentation.components.LabeledCheckbox
 import com.appriyo.repairmanager.presentation.components.OptionDropdown
 import com.appriyo.repairmanager.presentation.components.SectionCard
 import com.appriyo.repairmanager.presentation.viewmodel.AddRepairViewModel
@@ -96,11 +97,12 @@ fun AddRepairScreen(
     var password by remember { mutableStateOf("") }
     var pattern by remember { mutableStateOf("") }
 
-    var batteryIncluded by remember { mutableStateOf(true) }
-    var simIncluded by remember { mutableStateOf(true) }
+    // Accessories - unselected by default, the shop owner taps what was actually received
+    var batteryIncluded by remember { mutableStateOf(false) }
+    var simIncluded by remember { mutableStateOf(false) }
     var memoryCardIncluded by remember { mutableStateOf(false) }
-    var simTrayIncluded by remember { mutableStateOf(true) }
-    var backCoverIncluded by remember { mutableStateOf(true) }
+    var simTrayIncluded by remember { mutableStateOf(false) }
+    var backCoverIncluded by remember { mutableStateOf(false) }
     var deadPhonePermission by remember { mutableStateOf(false) }
 
     val calendar = remember { Calendar.getInstance() }
@@ -142,11 +144,11 @@ fun AddRepairScreen(
         securityType = SecurityType.NONE
         password = ""
         pattern = ""
-        batteryIncluded = true
-        simIncluded = true
+        batteryIncluded = false
+        simIncluded = false
         memoryCardIncluded = false
-        simTrayIncluded = true
-        backCoverIncluded = true
+        simTrayIncluded = false
+        backCoverIncluded = false
         deadPhonePermission = false
     }
 
@@ -193,11 +195,6 @@ fun AddRepairScreen(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -282,7 +279,7 @@ fun AddRepairScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
 
-            SectionCard (title = "Customer", icon = Icons.Filled.Person) {
+            SectionCard(title = "Customer", icon = Icons.Filled.Person) {
                 OutlinedTextField(
                     value = customerName,
                     onValueChange = { customerName = it },
@@ -414,52 +411,97 @@ fun AddRepairScreen(
             }
 
             SectionCard(title = "Accessories Received", icon = Icons.Filled.Inventory2) {
-                LabeledCheckbox("Battery Included", batteryIncluded, { batteryIncluded = it }, !uiState.isLoading)
-                LabeledCheckbox("SIM Included", simIncluded, { simIncluded = it }, !uiState.isLoading)
-                LabeledCheckbox("Memory Card Included", memoryCardIncluded, { memoryCardIncluded = it }, !uiState.isLoading)
-                LabeledCheckbox("SIM Tray Included", simTrayIncluded, { simTrayIncluded = it }, !uiState.isLoading)
-                LabeledCheckbox("Back Cover Included", backCoverIncluded, { backCoverIncluded = it }, !uiState.isLoading)
+                Text(
+                    text = "Tap to mark what the customer handed over",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AccessoryChip("Battery", batteryIncluded, { batteryIncluded = it }, !uiState.isLoading, Modifier.weight(1f))
+                    AccessoryChip("SIM", simIncluded, { simIncluded = it }, !uiState.isLoading, Modifier.weight(1f))
+                    AccessoryChip("Memory", memoryCardIncluded, { memoryCardIncluded = it }, !uiState.isLoading, Modifier.weight(1f))
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AccessoryChip("SIM Tray", simTrayIncluded, { simTrayIncluded = it }, !uiState.isLoading, Modifier.weight(1f))
+                    AccessoryChip("Back Cover", backCoverIncluded, { backCoverIncluded = it }, !uiState.isLoading, Modifier.weight(1f))
+                }
             }
 
-            // Dead phone permission - styled as a callout, not buried in a generic card
-            Card(
+            // Dead phone permission - one compact, switch-driven line
+            Surface(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                ),
-                elevation = CardDefaults.cardElevation(0.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.Top
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        Icons.Filled.WarningAmber,
+                        Icons.Filled.Bolt,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "Dead phone authorization",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        LabeledCheckbox(
-                            label = "Customer permits repair attempt even if phone cannot be powered on",
-                            checked = deadPhonePermission,
-                            onCheckedChange = { deadPhonePermission = it },
-                            enabled = !uiState.isLoading
-                        )
-                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Allow repair attempt on a dead/unpowered phone",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = deadPhonePermission,
+                        onCheckedChange = { deadPhonePermission = it },
+                        enabled = !uiState.isLoading
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AccessoryChip(
+    label: String,
+    selected: Boolean,
+    onToggle: (Boolean) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    FilterChip(
+        selected = selected,
+        onClick = { onToggle(!selected) },
+        enabled = enabled,
+        label = {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium
+            )
+        },
+        leadingIcon = if (selected) {
+            { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+        } else null,
+        shape = RoundedCornerShape(12.dp),
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+        ),
+        modifier = modifier
+    )
 }

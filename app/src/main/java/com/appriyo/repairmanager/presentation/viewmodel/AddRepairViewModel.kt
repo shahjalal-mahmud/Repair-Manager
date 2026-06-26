@@ -207,7 +207,16 @@ class AddRepairViewModel(
     fun consumeOneTimeEvents() {
         _uiState.value = _uiState.value.copy(
             isSuccess = false,
-            errorMessage = null
+            errorMessage = null,
+            printSuccess = null,
+            printErrorMessage = null,
+            fieldErrors = emptyMap()
+        )
+    }
+
+    fun consumePrintError() {
+        _uiState.value = _uiState.value.copy(
+            printErrorMessage = null
         )
     }
 

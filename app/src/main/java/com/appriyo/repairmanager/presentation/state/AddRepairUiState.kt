@@ -6,5 +6,7 @@ data class AddRepairUiState(
     val isSuccess: Boolean = false,
     val errorMessage: String? = null,
     val generatedSerialNumber: String? = null,
-    val fieldErrors: Map<String, String> = emptyMap()
+    val fieldErrors: Map<String, String> = emptyMap(),
+    val printSuccess: Boolean? = null,
+    val printErrorMessage: String? = null
 )

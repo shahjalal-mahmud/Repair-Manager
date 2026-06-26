@@ -6,18 +6,24 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -46,7 +52,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.appriyo.repairmanager.data.model.SecurityType
-import com.appriyo.repairmanager.navigation.Screen
 import com.appriyo.repairmanager.presentation.components.LabeledCheckbox
 import com.appriyo.repairmanager.presentation.components.OptionDropdown
 import com.appriyo.repairmanager.presentation.viewmodel.AddRepairViewModel
@@ -66,6 +71,7 @@ fun AddRepairScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
+    // Form fields
     var customerName by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
     var deviceModel by remember { mutableStateOf("") }
@@ -101,28 +107,66 @@ fun AddRepairScreen(
         }
     }
 
-    // React to success: show a toast with the serial number then navigate back to Dashboard.
+    // Function to clear all fields
+    fun clearFields() {
+        customerName = ""
+        phoneNumber = ""
+        deviceModel = ""
+        problemDescription = ""
+        expectedDeliveryDate = ""
+        paymentInfo = ""
+        additionalDetails = ""
+        boxNumber = ""
+        securityType = SecurityType.NONE
+        password = ""
+        pattern = ""
+        batteryIncluded = true
+        simIncluded = true
+        memoryCardIncluded = false
+        simTrayIncluded = true
+        backCoverIncluded = true
+        deadPhonePermission = false
+    }
+
+    // React to success: show toast with serial number and clear fields
     LaunchedEffect(uiState.isSuccess) {
         if (uiState.isSuccess) {
             val serial = uiState.generatedSerialNumber.orEmpty()
-            Toast.makeText(
-                context,
-                "Repair saved successfully! Serial: $serial",
-                Toast.LENGTH_LONG
-            ).show()
-            viewModel.consumeOneTimeEvents()
-            navController.navigate(Screen.AddRepair.route) {
-                popUpTo(Screen.AddRepair.route) { inclusive = true }
+
+            // Show success message
+            val message = if (uiState.printSuccess == true) {
+                "Repair saved and printed successfully! Serial: $serial"
+            } else {
+                "Repair saved successfully! Serial: $serial"
             }
+
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+
+            // Clear all fields
+            clearFields()
+
+            // Reset UI state
+            viewModel.consumeOneTimeEvents()
         }
     }
 
-    // React to errors: show a snackbar.
+    // React to print errors
+    LaunchedEffect(uiState.printErrorMessage) {
+        uiState.printErrorMessage?.let { message ->
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar("Print Error: $message")
+            }
+            viewModel.consumePrintError()
+        }
+    }
+
+    // React to general errors
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { message ->
             coroutineScope.launch {
                 snackbarHostState.showSnackbar(message)
             }
+            viewModel.consumeOneTimeEvents()
         }
     }
 
@@ -162,8 +206,9 @@ fun AddRepairScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                Spacer(height = 16.dp)
+                Spacer(modifier = Modifier.height(16.dp))
 
+                // Customer Name
                 OutlinedTextField(
                     value = customerName,
                     onValueChange = { customerName = it },
@@ -177,8 +222,9 @@ fun AddRepairScreen(
                     enabled = !uiState.isLoading
                 )
 
-                Spacer(height = 8.dp)
+                Spacer(modifier = Modifier.height(8.dp))
 
+                // Phone Number
                 OutlinedTextField(
                     value = phoneNumber,
                     onValueChange = { phoneNumber = it },
@@ -193,10 +239,11 @@ fun AddRepairScreen(
                     enabled = !uiState.isLoading
                 )
 
-                Spacer(height = 16.dp)
+                Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
-                Spacer(height = 16.dp)
+                Spacer(modifier = Modifier.height(16.dp))
 
+                // Device Model
                 OutlinedTextField(
                     value = deviceModel,
                     onValueChange = { deviceModel = it },
@@ -206,8 +253,9 @@ fun AddRepairScreen(
                     enabled = !uiState.isLoading
                 )
 
-                Spacer(height = 8.dp)
+                Spacer(modifier = Modifier.height(8.dp))
 
+                // Problem Description
                 OutlinedTextField(
                     value = problemDescription,
                     onValueChange = { problemDescription = it },
@@ -218,8 +266,9 @@ fun AddRepairScreen(
                     enabled = !uiState.isLoading
                 )
 
-                Spacer(height = 8.dp)
+                Spacer(modifier = Modifier.height(8.dp))
 
+                // Expected Delivery Date
                 OutlinedTextField(
                     value = expectedDeliveryDate,
                     onValueChange = { },
@@ -233,11 +282,13 @@ fun AddRepairScreen(
                             Icon(Icons.Filled.CalendarToday, contentDescription = "Pick date")
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.isLoading
                 )
 
-                Spacer(height = 8.dp)
+                Spacer(modifier = Modifier.height(8.dp))
 
+                // Payment Info
                 OutlinedTextField(
                     value = paymentInfo,
                     onValueChange = { paymentInfo = it },
@@ -249,8 +300,9 @@ fun AddRepairScreen(
                     enabled = !uiState.isLoading
                 )
 
-                Spacer(height = 8.dp)
+                Spacer(modifier = Modifier.height(8.dp))
 
+                // Box Number
                 OutlinedTextField(
                     value = boxNumber,
                     onValueChange = { boxNumber = it },
@@ -260,8 +312,9 @@ fun AddRepairScreen(
                     enabled = !uiState.isLoading
                 )
 
-                Spacer(height = 8.dp)
+                Spacer(modifier = Modifier.height(8.dp))
 
+                // Additional Details
                 OutlinedTextField(
                     value = additionalDetails,
                     onValueChange = { additionalDetails = it },
@@ -272,17 +325,18 @@ fun AddRepairScreen(
                     enabled = !uiState.isLoading
                 )
 
-                Spacer(height = 16.dp)
+                Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
-                Spacer(height = 16.dp)
+                Spacer(modifier = Modifier.height(16.dp))
 
+                // Security Section
                 Text(
                     text = "Security Information",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
 
-                Spacer(height = 8.dp)
+                Spacer(modifier = Modifier.height(8.dp))
 
                 OptionDropdown(
                     label = "Security Type",
@@ -292,7 +346,7 @@ fun AddRepairScreen(
                     enabled = !uiState.isLoading
                 )
 
-                Spacer(height = 8.dp)
+                Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedTextField(
                     value = password,
@@ -303,7 +357,7 @@ fun AddRepairScreen(
                     enabled = !uiState.isLoading
                 )
 
-                Spacer(height = 8.dp)
+                Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedTextField(
                     value = pattern,
@@ -314,26 +368,53 @@ fun AddRepairScreen(
                     enabled = !uiState.isLoading
                 )
 
-                Spacer(height = 16.dp)
+                Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
-                Spacer(height = 16.dp)
+                Spacer(modifier = Modifier.height(16.dp))
 
+                // Accessories Section
                 Text(
                     text = "Accessories Received",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
 
-                LabeledCheckbox("Battery Included", batteryIncluded, { batteryIncluded = it }, !uiState.isLoading)
-                LabeledCheckbox("SIM Included", simIncluded, { simIncluded = it }, !uiState.isLoading)
-                LabeledCheckbox("Memory Card Included", memoryCardIncluded, { memoryCardIncluded = it }, !uiState.isLoading)
-                LabeledCheckbox("SIM Tray Included", simTrayIncluded, { simTrayIncluded = it }, !uiState.isLoading)
-                LabeledCheckbox("Back Cover Included", backCoverIncluded, { backCoverIncluded = it }, !uiState.isLoading)
+                LabeledCheckbox(
+                    "Battery Included",
+                    batteryIncluded,
+                    { batteryIncluded = it },
+                    !uiState.isLoading
+                )
+                LabeledCheckbox(
+                    "SIM Included",
+                    simIncluded,
+                    { simIncluded = it },
+                    !uiState.isLoading
+                )
+                LabeledCheckbox(
+                    "Memory Card Included",
+                    memoryCardIncluded,
+                    { memoryCardIncluded = it },
+                    !uiState.isLoading
+                )
+                LabeledCheckbox(
+                    "SIM Tray Included",
+                    simTrayIncluded,
+                    { simTrayIncluded = it },
+                    !uiState.isLoading
+                )
+                LabeledCheckbox(
+                    "Back Cover Included",
+                    backCoverIncluded,
+                    { backCoverIncluded = it },
+                    !uiState.isLoading
+                )
 
-                Spacer(height = 16.dp)
+                Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
-                Spacer(height = 16.dp)
+                Spacer(modifier = Modifier.height(16.dp))
 
+                // Dead Phone Permission
                 LabeledCheckbox(
                     label = "Customer permits repair attempt even if phone cannot be powered on (dead phone)",
                     checked = deadPhonePermission,
@@ -341,48 +422,110 @@ fun AddRepairScreen(
                     enabled = !uiState.isLoading
                 )
 
-                Spacer(height = 24.dp)
+                Spacer(modifier = Modifier.height(24.dp))
 
-                Button(
-                    onClick = {
-                        viewModel.saveRepair(
-                            customerName = customerName,
-                            phoneNumber = phoneNumber,
-                            deviceModel = deviceModel,
-                            problemDescription = problemDescription,
-                            expectedDeliveryDate = expectedDeliveryDate,
-                            paymentInfo = paymentInfo,
-                            additionalDetails = additionalDetails,
-                            boxNumber = boxNumber,
-                            securityType = securityType,
-                            password = password,
-                            pattern = pattern,
-                            batteryIncluded = batteryIncluded,
-                            simIncluded = simIncluded,
-                            memoryCardIncluded = memoryCardIncluded,
-                            simTrayIncluded = simTrayIncluded,
-                            backCoverIncluded = backCoverIncluded,
-                            deadPhonePermission = deadPhonePermission
-                        )
-                    },
-                    enabled = !uiState.isLoading,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
+                // Two buttons side by side
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (uiState.isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
+                    // Save Only Button
+                    Button(
+                        onClick = {
+                            viewModel.saveRepairOnly(
+                                customerName = customerName,
+                                phoneNumber = phoneNumber,
+                                deviceModel = deviceModel,
+                                problemDescription = problemDescription,
+                                expectedDeliveryDate = expectedDeliveryDate,
+                                paymentInfo = paymentInfo,
+                                additionalDetails = additionalDetails,
+                                boxNumber = boxNumber,
+                                securityType = securityType,
+                                password = password,
+                                pattern = pattern,
+                                batteryIncluded = batteryIncluded,
+                                simIncluded = simIncluded,
+                                memoryCardIncluded = memoryCardIncluded,
+                                simTrayIncluded = simTrayIncluded,
+                                backCoverIncluded = backCoverIncluded,
+                                deadPhonePermission = deadPhonePermission
+                            )
+                        },
+                        enabled = !uiState.isLoading,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary
                         )
-                    } else {
-                        Text("Save Repair Record")
+                    ) {
+                        if (uiState.isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                color = MaterialTheme.colorScheme.onSecondary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                Icons.Filled.Save,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Save Only")
+                        }
+                    }
+
+                    // Save & Print Button
+                    Button(
+                        onClick = {
+                            viewModel.saveAndPrintRepair(
+                                customerName = customerName,
+                                phoneNumber = phoneNumber,
+                                deviceModel = deviceModel,
+                                problemDescription = problemDescription,
+                                expectedDeliveryDate = expectedDeliveryDate,
+                                paymentInfo = paymentInfo,
+                                additionalDetails = additionalDetails,
+                                boxNumber = boxNumber,
+                                securityType = securityType,
+                                password = password,
+                                pattern = pattern,
+                                batteryIncluded = batteryIncluded,
+                                simIncluded = simIncluded,
+                                memoryCardIncluded = memoryCardIncluded,
+                                simTrayIncluded = simTrayIncluded,
+                                backCoverIncluded = backCoverIncluded,
+                                deadPhonePermission = deadPhonePermission
+                            )
+                        },
+                        enabled = !uiState.isLoading,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp)
+                    ) {
+                        if (uiState.isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                Icons.Filled.Print,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Save & Print")
+                        }
                     }
                 }
 
-                Spacer(height = 8.dp)
+                Spacer(modifier = Modifier.height(8.dp))
 
+                // Cancel Button
                 OutlinedButton(
                     onClick = { navController.popBackStack() },
                     enabled = !uiState.isLoading,
@@ -393,13 +536,8 @@ fun AddRepairScreen(
                     Text("Cancel")
                 }
 
-                Spacer(height = 24.dp)
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
-}
-
-@Composable
-private fun Spacer(height: androidx.compose.ui.unit.Dp) {
-    androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(height))
 }

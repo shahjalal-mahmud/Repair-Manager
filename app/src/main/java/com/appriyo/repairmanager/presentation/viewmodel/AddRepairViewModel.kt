@@ -19,6 +19,22 @@ class AddRepairViewModel(
     private val _uiState = MutableStateFlow(AddRepairUiState())
     val uiState = _uiState.asStateFlow()
 
+    init {
+        viewModelScope.launch {
+            printViewModel.uiState.collect { printState ->
+                _uiState.value = _uiState.value.copy(
+                    printSuccess = if (printState.successMessage != null) true
+                    else if (printState.errorMessage != null) false
+                    else _uiState.value.printSuccess,
+                    printErrorMessage = printState.errorMessage,
+                    missingPermissions = printState.missingPermissions
+                )
+                if (printState.successMessage != null) printViewModel.consumeSuccess()
+                if (printState.errorMessage != null) printViewModel.consumeError()
+            }
+        }
+    }
+
     /**
      * Save repair without printing
      */

@@ -8,5 +8,6 @@ data class AddRepairUiState(
     val generatedSerialNumber: String? = null,
     val fieldErrors: Map<String, String> = emptyMap(),
     val printSuccess: Boolean? = null,
-    val printErrorMessage: String? = null
+    val printErrorMessage: String? = null,
+    val missingPermissions: List<String> = emptyList()
 )

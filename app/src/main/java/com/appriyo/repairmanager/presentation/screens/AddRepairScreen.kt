@@ -3,9 +3,11 @@ package com.appriyo.repairmanager.presentation.screens
 import android.annotation.SuppressLint
 import android.app.DatePickerDialog
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,26 +17,34 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -45,6 +55,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -107,7 +118,18 @@ fun AddRepairScreen(
         }
     }
 
-    // Function to clear all fields
+    // Bluetooth permission launcher (for printing)
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { /* user can retry Save & Print regardless of result */ }
+
+    LaunchedEffect(uiState.missingPermissions) {
+        if (uiState.missingPermissions.isNotEmpty()) {
+            permissionLauncher.launch(uiState.missingPermissions.toTypedArray())
+            viewModel.consumeMissingPermissions()
+        }
+    }
+
     fun clearFields() {
         customerName = ""
         phoneNumber = ""
@@ -128,29 +150,20 @@ fun AddRepairScreen(
         deadPhonePermission = false
     }
 
-    // React to success: show toast with serial number and clear fields
     LaunchedEffect(uiState.isSuccess) {
         if (uiState.isSuccess) {
             val serial = uiState.generatedSerialNumber.orEmpty()
-
-            // Show success message
             val message = if (uiState.printSuccess == true) {
                 "Repair saved and printed successfully! Serial: $serial"
             } else {
                 "Repair saved successfully! Serial: $serial"
             }
-
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-
-            // Clear all fields
             clearFields()
-
-            // Reset UI state
             viewModel.consumeOneTimeEvents()
         }
     }
 
-    // React to print errors
     LaunchedEffect(uiState.printErrorMessage) {
         uiState.printErrorMessage?.let { message ->
             coroutineScope.launch {
@@ -160,7 +173,6 @@ fun AddRepairScreen(
         }
     }
 
-    // React to general errors
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { message ->
             coroutineScope.launch {
@@ -173,7 +185,16 @@ fun AddRepairScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Add Repair") },
+                title = {
+                    Column {
+                        Text("New Repair", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Serial number is generated automatically",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -181,50 +202,99 @@ fun AddRepairScreen(
                 }
             )
         },
+        bottomBar = {
+            Surface(
+                shadowElevation = 8.dp,
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.saveRepairOnly(
+                                customerName, phoneNumber, deviceModel, problemDescription,
+                                expectedDeliveryDate, paymentInfo, additionalDetails, boxNumber,
+                                securityType, password, pattern, batteryIncluded, simIncluded,
+                                memoryCardIncluded, simTrayIncluded, backCoverIncluded, deadPhonePermission
+                            )
+                        },
+                        enabled = !uiState.isLoading,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.weight(1f).height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    ) {
+                        if (uiState.isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        } else {
+                            Icon(Icons.Filled.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Save Only")
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            viewModel.saveAndPrintRepair(
+                                customerName, phoneNumber, deviceModel, problemDescription,
+                                expectedDeliveryDate, paymentInfo, additionalDetails, boxNumber,
+                                securityType, password, pattern, batteryIncluded, simIncluded,
+                                memoryCardIncluded, simTrayIncluded, backCoverIncluded, deadPhonePermission
+                            )
+                        },
+                        enabled = !uiState.isLoading,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.weight(1f).height(52.dp)
+                    ) {
+                        if (uiState.isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Icon(Icons.Filled.Print, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Save & Print")
+                        }
+                    }
+                }
+            }
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = "New Repair Record",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Fill in the details below. A unique serial number will be generated automatically.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Customer Name
+            SectionCard(title = "Customer", icon = Icons.Filled.Person) {
                 OutlinedTextField(
                     value = customerName,
                     onValueChange = { customerName = it },
                     label = { Text("Customer Name *") },
                     singleLine = true,
                     isError = uiState.fieldErrors.containsKey("customerName"),
-                    supportingText = {
-                        uiState.fieldErrors["customerName"]?.let { Text(it) }
-                    },
+                    supportingText = { uiState.fieldErrors["customerName"]?.let { Text(it) } },
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading
                 )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Phone Number
+                Spacer(modifier = Modifier.height(10.dp))
                 OutlinedTextField(
                     value = phoneNumber,
                     onValueChange = { phoneNumber = it },
@@ -232,43 +302,35 @@ fun AddRepairScreen(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     isError = uiState.fieldErrors.containsKey("phoneNumber"),
-                    supportingText = {
-                        uiState.fieldErrors["phoneNumber"]?.let { Text(it) }
-                    },
+                    supportingText = { uiState.fieldErrors["phoneNumber"]?.let { Text(it) } },
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading
                 )
+            }
 
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider()
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Device Model
+            SectionCard(title = "Device & Issue", icon = Icons.Filled.Smartphone) {
                 OutlinedTextField(
                     value = deviceModel,
                     onValueChange = { deviceModel = it },
                     label = { Text("Device Model") },
                     singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading
                 )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Problem Description
+                Spacer(modifier = Modifier.height(10.dp))
                 OutlinedTextField(
                     value = problemDescription,
                     onValueChange = { problemDescription = it },
                     label = { Text("Problem Description") },
                     minLines = 3,
                     maxLines = 5,
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading
                 )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Expected Delivery Date
+                Spacer(modifier = Modifier.height(10.dp))
                 OutlinedTextField(
                     value = expectedDeliveryDate,
                     onValueChange = { },
@@ -276,19 +338,38 @@ fun AddRepairScreen(
                     singleLine = true,
                     readOnly = true,
                     trailingIcon = {
-                        IconButton(
-                            onClick = { if (!uiState.isLoading) datePickerDialog.show() }
-                        ) {
+                        IconButton(onClick = { if (!uiState.isLoading) datePickerDialog.show() }) {
                             Icon(Icons.Filled.CalendarToday, contentDescription = "Pick date")
                         }
                     },
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading
                 )
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = boxNumber,
+                    onValueChange = { boxNumber = it },
+                    label = { Text("Box Number") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.isLoading
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = additionalDetails,
+                    onValueChange = { additionalDetails = it },
+                    label = { Text("Additional Details") },
+                    minLines = 2,
+                    maxLines = 4,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.isLoading
+                )
+            }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Payment Info
+            SectionCard(title = "Payment", icon = Icons.Filled.Payments) {
                 OutlinedTextField(
                     value = paymentInfo,
                     onValueChange = { paymentInfo = it },
@@ -296,48 +377,13 @@ fun AddRepairScreen(
                     placeholder = { Text("e.g. Advance ৳500, Due ৳1000") },
                     minLines = 2,
                     maxLines = 3,
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading
                 )
+            }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Box Number
-                OutlinedTextField(
-                    value = boxNumber,
-                    onValueChange = { boxNumber = it },
-                    label = { Text("Box Number") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !uiState.isLoading
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Additional Details
-                OutlinedTextField(
-                    value = additionalDetails,
-                    onValueChange = { additionalDetails = it },
-                    label = { Text("Additional Details") },
-                    minLines = 2,
-                    maxLines = 4,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !uiState.isLoading
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider()
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Security Section
-                Text(
-                    text = "Security Information",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
+            SectionCard(title = "Security", icon = Icons.Filled.Lock) {
                 OptionDropdown(
                     label = "Security Type",
                     options = SecurityType.ALL,
@@ -345,199 +391,108 @@ fun AddRepairScreen(
                     onOptionSelected = { securityType = it },
                     enabled = !uiState.isLoading
                 )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
+                Spacer(modifier = Modifier.height(10.dp))
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
                     label = { Text("Password") },
                     singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading
                 )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
+                Spacer(modifier = Modifier.height(10.dp))
                 OutlinedTextField(
                     value = pattern,
                     onValueChange = { pattern = it },
                     label = { Text("Pattern (e.g. 1-2-3-6-9)") },
                     singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading
                 )
-
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider()
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Accessories Section
-                Text(
-                    text = "Accessories Received",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-
-                LabeledCheckbox(
-                    "Battery Included",
-                    batteryIncluded,
-                    { batteryIncluded = it },
-                    !uiState.isLoading
-                )
-                LabeledCheckbox(
-                    "SIM Included",
-                    simIncluded,
-                    { simIncluded = it },
-                    !uiState.isLoading
-                )
-                LabeledCheckbox(
-                    "Memory Card Included",
-                    memoryCardIncluded,
-                    { memoryCardIncluded = it },
-                    !uiState.isLoading
-                )
-                LabeledCheckbox(
-                    "SIM Tray Included",
-                    simTrayIncluded,
-                    { simTrayIncluded = it },
-                    !uiState.isLoading
-                )
-                LabeledCheckbox(
-                    "Back Cover Included",
-                    backCoverIncluded,
-                    { backCoverIncluded = it },
-                    !uiState.isLoading
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider()
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Dead Phone Permission
-                LabeledCheckbox(
-                    label = "Customer permits repair attempt even if phone cannot be powered on (dead phone)",
-                    checked = deadPhonePermission,
-                    onCheckedChange = { deadPhonePermission = it },
-                    enabled = !uiState.isLoading
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Two buttons side by side
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Save Only Button
-                    Button(
-                        onClick = {
-                            viewModel.saveRepairOnly(
-                                customerName = customerName,
-                                phoneNumber = phoneNumber,
-                                deviceModel = deviceModel,
-                                problemDescription = problemDescription,
-                                expectedDeliveryDate = expectedDeliveryDate,
-                                paymentInfo = paymentInfo,
-                                additionalDetails = additionalDetails,
-                                boxNumber = boxNumber,
-                                securityType = securityType,
-                                password = password,
-                                pattern = pattern,
-                                batteryIncluded = batteryIncluded,
-                                simIncluded = simIncluded,
-                                memoryCardIncluded = memoryCardIncluded,
-                                simTrayIncluded = simTrayIncluded,
-                                backCoverIncluded = backCoverIncluded,
-                                deadPhonePermission = deadPhonePermission
-                            )
-                        },
-                        enabled = !uiState.isLoading,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) {
-                        if (uiState.isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
-                                color = MaterialTheme.colorScheme.onSecondary,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                Icons.Filled.Save,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Save Only")
-                        }
-                    }
-
-                    // Save & Print Button
-                    Button(
-                        onClick = {
-                            viewModel.saveAndPrintRepair(
-                                customerName = customerName,
-                                phoneNumber = phoneNumber,
-                                deviceModel = deviceModel,
-                                problemDescription = problemDescription,
-                                expectedDeliveryDate = expectedDeliveryDate,
-                                paymentInfo = paymentInfo,
-                                additionalDetails = additionalDetails,
-                                boxNumber = boxNumber,
-                                securityType = securityType,
-                                password = password,
-                                pattern = pattern,
-                                batteryIncluded = batteryIncluded,
-                                simIncluded = simIncluded,
-                                memoryCardIncluded = memoryCardIncluded,
-                                simTrayIncluded = simTrayIncluded,
-                                backCoverIncluded = backCoverIncluded,
-                                deadPhonePermission = deadPhonePermission
-                            )
-                        },
-                        enabled = !uiState.isLoading,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp)
-                    ) {
-                        if (uiState.isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                Icons.Filled.Print,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Save & Print")
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Cancel Button
-                OutlinedButton(
-                    onClick = { navController.popBackStack() },
-                    enabled = !uiState.isLoading,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                ) {
-                    Text("Cancel")
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
             }
+
+            SectionCard(title = "Accessories Received", icon = Icons.Filled.Inventory2) {
+                LabeledCheckbox("Battery Included", batteryIncluded, { batteryIncluded = it }, !uiState.isLoading)
+                LabeledCheckbox("SIM Included", simIncluded, { simIncluded = it }, !uiState.isLoading)
+                LabeledCheckbox("Memory Card Included", memoryCardIncluded, { memoryCardIncluded = it }, !uiState.isLoading)
+                LabeledCheckbox("SIM Tray Included", simTrayIncluded, { simTrayIncluded = it }, !uiState.isLoading)
+                LabeledCheckbox("Back Cover Included", backCoverIncluded, { backCoverIncluded = it }, !uiState.isLoading)
+            }
+
+            // Dead phone permission - styled as a callout, not buried in a generic card
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                ),
+                elevation = CardDefaults.cardElevation(0.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        Icons.Filled.WarningAmber,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Dead phone authorization",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        LabeledCheckbox(
+                            label = "Customer permits repair attempt even if phone cannot be powered on",
+                            checked = deadPhonePermission,
+                            onCheckedChange = { deadPhonePermission = it },
+                            enabled = !uiState.isLoading
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun SectionCard(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(0.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            content()
         }
     }
 }

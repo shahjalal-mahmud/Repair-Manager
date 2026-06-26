@@ -1,52 +1,10 @@
-// ============================================================================
-// REPAIR DATA MODEL
-// ============================================================================
-
+// app/src/main/java/com/appriyo/repairmanager/data/model/Repair.kt
 package com.appriyo.repairmanager.data.model
 
 import com.google.firebase.firestore.PropertyName
 import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
 
-/**
- * Firestore-compatible data class representing a single repair record.
- *
- * Collection: "repairs"
- * Document ID: Firestore auto-generated ID (mirrored into [id] for convenience)
- *
- * **Important:** This class requires a no-argument constructor for Firestore's
- * automatic deserialization via `toObject<Repair>()`. All properties have default
- * values to satisfy this requirement.
- *
- * **Migration Note:** Fields `deviceName` and `problem` have been renamed to
- * `deviceModel` and `problemDescription` respectively to align with the Phase 1 spec.
- *
- * @property id Unique document identifier (mirrored from Firestore)
- * @property serialNumber Human-readable sequential identifier (format: RM-XXXXXX)
- * @property customerName Full name of the customer
- * @property phoneNumber Contact phone number
- * @property deviceModel Model of the device being repaired
- * @property problemDescription Description of the reported issue
- * @property expectedDeliveryDate Estimated completion date
- * @property paymentInfo Payment method or transaction details
- * @property additionalDetails Supplementary notes or instructions
- * @property boxNumber Storage box identifier
- * @property status Current repair status (see [RepairStatus])
- * @property securityType Lock screen security type (see [SecurityType])
- * @property password Device password (if applicable)
- * @property pattern Device pattern lock (if applicable)
- * @property batteryIncluded Whether battery was included with the device
- * @property simIncluded Whether SIM card was included
- * @property memoryCardIncluded Whether memory card was included
- * @property simTrayIncluded Whether SIM tray was included
- * @property backCoverIncluded Whether back cover was included
- * @property deadPhonePermission Permission to work on a dead/non-responsive device
- * @property photoCount Number of photos captured (future implementation)
- * @property videoCount Number of videos captured (future implementation)
- * @property createdAt Timestamp when the record was created (server timestamp)
- * @property updatedAt Timestamp when the record was last updated (server timestamp)
- * @property createdBy User identifier who created this record
- */
 data class Repair(
     @get:PropertyName("id") @set:PropertyName("id")
     var id: String = "",
@@ -108,6 +66,9 @@ data class Repair(
     @get:PropertyName("deadPhonePermission") @set:PropertyName("deadPhonePermission")
     var deadPhonePermission: Boolean = false,
 
+    @get:PropertyName("draftId") @set:PropertyName("draftId")
+    var draftId: String = "",
+
     @get:PropertyName("photoCount") @set:PropertyName("photoCount")
     var photoCount: Int = 0,
 
@@ -126,17 +87,6 @@ data class Repair(
     var createdBy: String = ""
 )
 
-// ============================================================================
-// CONSTANTS & ENUMS
-// ============================================================================
-
-/**
- * Defines the possible statuses for a repair record.
- *
- * **Status Lifecycle:**
- * PENDING → IN_PROGRESS → COMPLETED → DELIVERED
- *                      ↘ CANCELLED
- */
 object RepairStatus {
     const val PENDING = "Pending"
     const val IN_PROGRESS = "In Progress"
@@ -147,9 +97,6 @@ object RepairStatus {
     val ALL = listOf(PENDING, IN_PROGRESS, COMPLETED, DELIVERED, CANCELLED)
 }
 
-/**
- * Defines the possible security types for a locked device.
- */
 object SecurityType {
     const val NONE = "None"
     const val PASSWORD = "Password"
@@ -159,9 +106,6 @@ object SecurityType {
     val ALL = listOf(NONE, PASSWORD, PATTERN, BOTH)
 }
 
-/**
- * Firestore collection and document path constants.
- */
 object FirestorePaths {
     const val REPAIRS_COLLECTION = "repairs"
     const val COUNTERS_COLLECTION = "counters"

@@ -47,8 +47,8 @@ val appModule = module {
     viewModel { AuthViewModel(get()) }
     viewModel { AddRepairViewModel(get(), get(), get()) }
     viewModel { PrintViewModel(get()) }
-    viewModel { CustomerListViewModel(get()) }
-    viewModel { CustomerDetailsViewModel(get()) }
+    viewModel { CustomerListViewModel(get(), get()) }
+    viewModel { CustomerDetailsViewModel(get(), get()) }
     viewModel { EditRepairViewModel(get()) }
     viewModel { NotesViewModel(get(), get()) }
     viewModel { EmployeeNotesViewModel(get(), get()) }

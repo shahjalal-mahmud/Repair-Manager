@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.appriyo.repairmanager.data.model.EmployeeNote
 import com.appriyo.repairmanager.data.repository.AuthRepository
 import com.appriyo.repairmanager.data.repository.EmployeeNotesRepository
+import com.appriyo.repairmanager.presentation.components.ToastMessage
+import com.appriyo.repairmanager.presentation.components.ToastType
 import com.appriyo.repairmanager.presentation.state.EmployeeNotesUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -85,6 +87,7 @@ class EmployeeNotesViewModel(
         val totalPayment = totalPaymentText.trim().toDoubleOrNull() ?: 0.0
         val profit = profitText.trim().toDoubleOrNull() ?: 0.0
         val editingNoteId = _uiState.value.editingNote?.id
+        val isEditing = editingNoteId != null
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSaving = true, errorMessage = null, titleError = null)
@@ -106,7 +109,8 @@ class EmployeeNotesViewModel(
                         isSaving = false,
                         isDialogOpen = false,
                         editingNote = null,
-                        errorMessage = null
+                        errorMessage = null,
+                        toast = ToastMessage(if (isEditing) "Entry updated" else "Entry added")
                     )
                 },
                 onFailure = { exception ->
@@ -119,14 +123,42 @@ class EmployeeNotesViewModel(
         }
     }
 
-    fun deleteNote(noteId: String) {
+    /** Step 1 of delete: open the confirmation dialog for this entry. */
+    fun requestDeleteNote(note: EmployeeNote) {
+        _uiState.value = _uiState.value.copy(noteToDelete = note)
+    }
+
+    /** User tapped Cancel on the confirmation dialog. */
+    fun dismissDeleteConfirmation() {
+        if (_uiState.value.isDeleting) return
+        _uiState.value = _uiState.value.copy(noteToDelete = null)
+    }
+
+    /** Step 2 of delete: user tapped OK/Delete on the confirmation dialog. */
+    fun confirmDeleteNote() {
+        val note = _uiState.value.noteToDelete ?: return
+
         viewModelScope.launch {
-            val result = employeeNotesRepository.deleteEmployeeNote(noteId)
+            _uiState.value = _uiState.value.copy(isDeleting = true)
+
+            val result = employeeNotesRepository.deleteEmployeeNote(note.id)
+
             result.fold(
-                onSuccess = { /* realtime listener refreshes the list automatically */ },
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(
+                        isDeleting = false,
+                        noteToDelete = null,
+                        toast = ToastMessage("Entry deleted", ToastType.SUCCESS)
+                    )
+                },
                 onFailure = { exception ->
                     _uiState.value = _uiState.value.copy(
-                        errorMessage = exception.localizedMessage ?: "Failed to delete entry. Please try again."
+                        isDeleting = false,
+                        noteToDelete = null,
+                        toast = ToastMessage(
+                            exception.localizedMessage ?: "Failed to delete entry.",
+                            ToastType.ERROR
+                        )
                     )
                 }
             )
@@ -135,5 +167,9 @@ class EmployeeNotesViewModel(
 
     fun consumeError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+
+    fun consumeToast() {
+        _uiState.value = _uiState.value.copy(toast = null)
     }
 }

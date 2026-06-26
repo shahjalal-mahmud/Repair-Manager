@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.core.content.FileProvider
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -100,6 +101,62 @@ class MediaStorageManager(private val context: Context) {
     /** Permanently deletes a media file (used when the user removes an attachment, or on cancel). */
     fun delete(uri: Uri): Boolean =
         runCatching { resolver.delete(uri, null, null) > 0 }.getOrDefault(false)
+
+    /**
+     * Directory for short-lived camera-capture files, cleared by the OS under
+     * storage pressure. Files here are deleted as soon as [commitCapturedMedia]
+     * copies them into shared storage.
+     */
+    private val captureDir: File
+        get() = File(context.cacheDir, "captures").apply { mkdirs() }
+
+    /**
+     * Creates an empty temp file for the camera to write into, exposed as a
+     * FileProvider Uri.
+     *
+     * **Why not write directly into MediaStore for camera capture:** a
+     * MediaStore entry created (and owned) by our app is not reliably
+     * writable by a *different* app (the camera app) — many camera apps
+     * fail or crash trying to write into it. A FileProvider Uri grants the
+     * camera app a proper, temporary write permission, which is the
+     * standard, reliable pattern for ACTION_IMAGE_CAPTURE / VIDEO_CAPTURE.
+     */
+    fun createTempCaptureFile(isVideo: Boolean, draftId: String): File {
+        val ext = if (isVideo) "mp4" else "jpg"
+        return File(captureDir, fileName(draftId, ext))
+    }
+
+    /** Wraps a temp capture file as a FileProvider Uri suitable for camera intents. */
+    fun uriForCaptureFile(file: File): Uri =
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+
+    /**
+     * Called after a successful camera capture. Copies the temp file's bytes
+     * into shared Pictures/Movies storage (so it survives uninstall/update,
+     * same as gallery-picked media) and deletes the temp file.
+     */
+    fun commitCapturedMedia(file: File, isVideo: Boolean, draftId: String): Uri? {
+        if (!file.exists()) return null
+        val destUri = (if (isVideo) createVideoCaptureUri(draftId) else createImageCaptureUri(draftId))
+            ?: return null
+        return try {
+            file.inputStream().use { input ->
+                resolver.openOutputStream(destUri)?.use { output -> input.copyTo(output) }
+            }
+            finalize(destUri, isVideo)
+            file.delete()
+            destUri
+        } catch (e: Exception) {
+            runCatching { resolver.delete(destUri, null, null) }
+            runCatching { file.delete() }
+            null
+        }
+    }
+
+    /** Discards a temp capture file when the user cancels out of the camera. */
+    fun discardTempFile(file: File) {
+        runCatching { file.delete() }
+    }
 
     private fun fileName(draftId: String, ext: String): String {
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmssSSS", Locale.US).format(Date())

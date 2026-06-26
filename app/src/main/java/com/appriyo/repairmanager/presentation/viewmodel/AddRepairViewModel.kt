@@ -236,6 +236,10 @@ class AddRepairViewModel(
         )
     }
 
+    fun consumeMissingPermissions() {
+        _uiState.value = _uiState.value.copy(missingPermissions = emptyList())
+    }
+
     private fun validateFields(
         customerName: String,
         phoneNumber: String

@@ -1,18 +1,17 @@
 // app/src/main/java/com/appriyo/repairmanager/presentation/state/CustomerListUiState.kt
 package com.appriyo.repairmanager.presentation.state
 
+import android.graphics.Bitmap
 import com.appriyo.repairmanager.data.model.Repair
 
 data class CustomerListUiState(
     val isLoading: Boolean = true,
     val repairs: List<Repair> = emptyList(),
     val searchQuery: String = "",
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    // keyed by repair.id → first photo thumbnail (null = no photo or not yet loaded)
+    val thumbnails: Map<String, Bitmap?> = emptyMap()
 ) {
-    /**
-     * Client-side filter by customer name, phone number, serial number, or device model.
-     * Kept client-side per Phase 1 scope - no need for a search index on the free tier.
-     */
     val filteredRepairs: List<Repair>
         get() {
             if (searchQuery.isBlank()) return repairs

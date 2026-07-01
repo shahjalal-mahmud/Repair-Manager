@@ -7,17 +7,28 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
 /**
- * Handles smsLogs/{repairId}_{status} - the duplicate-prevention mechanism.
+ * Handles users/{uid}/smsLogs/{repairId}_{status} - the duplicate-prevention
+ * mechanism.
+ *
+ * **Data isolation:** SMS logs now live under the signed-in account's own
+ * document, so two different repair shops (Google accounts) never see or
+ * collide with each other's SMS history. Multiple devices signed into the
+ * SAME account still share this collection, so the transactional claim below
+ * continues to prevent duplicate sends across devices exactly as before.
  *
  * Two-phase to avoid races across listener re-fires:
  *  1) tryClaimLog: transactionally creates the log doc IF AND ONLY IF it doesn't exist yet.
  *     If it already exists, that status was already handled - caller must not send again.
  *  2) updateLogResult: after the actual SMS send attempt, records whether it succeeded.
  */
-class SmsLogRepository(private val firestore: FirebaseFirestore) {
+class SmsLogRepository(
+    private val firestore: FirebaseFirestore,
+    private val userProvider: FirestoreUserProvider
+) {
 
     private val logsCollection
-        get() = firestore.collection(SmsFirestorePaths.SMS_LOGS_COLLECTION)
+        get() = userProvider.currentUserDocument()
+            .collection(SmsFirestorePaths.SMS_LOGS_COLLECTION)
 
     private fun logId(repairId: String, status: String) = "${repairId}_$status"
 
@@ -30,8 +41,8 @@ class SmsLogRepository(private val firestore: FirebaseFirestore) {
         deviceId: String
     ): Result<Boolean> {
         val id = logId(repairId, status)
-        val logRef = logsCollection.document(id)
         return try {
+            val logRef = logsCollection.document(id)
             val claimed = firestore.runTransaction { transaction ->
                 val snapshot = transaction.get(logRef)
                 if (snapshot.exists()) {

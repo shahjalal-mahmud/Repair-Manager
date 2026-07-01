@@ -16,17 +16,23 @@ import kotlinx.coroutines.tasks.await
 
 /**
  * Repository responsible for all Firestore operations related to general
- * business notes ("notes" collection).
+ * business notes.
+ *
+ * **Data isolation:** Notes now live at users/{uid}/notes so each Google
+ * account (repair shop) only ever sees its own notes, while multiple devices
+ * signed into the same account continue to sync in real time.
  *
  * Mirrors the structure of RepairRepository: Result-wrapped suspend functions
  * for writes, and a callbackFlow-backed snapshot listener for realtime reads.
  */
 class NotesRepository(
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val userProvider: FirestoreUserProvider
 ) {
 
     private val notesCollection
-        get() = firestore.collection(NotesFirestorePaths.NOTES_COLLECTION)
+        get() = userProvider.currentUserDocument()
+            .collection(NotesFirestorePaths.NOTES_COLLECTION)
 
     suspend fun createNote(
         title: String,
@@ -61,6 +67,8 @@ class NotesRepository(
             Result.failure(Exception(mapFirestoreException(e), e))
         } catch (e: FirebaseNetworkException) {
             Result.failure(Exception("Network error. Please check your internet connection and try again.", e))
+        } catch (e: NotAuthenticatedException) {
+            Result.failure(e)
         } catch (e: Exception) {
             Result.failure(Exception("Failed to save note: ${e.localizedMessage ?: "Unknown error"}", e))
         }
@@ -84,6 +92,8 @@ class NotesRepository(
             Result.failure(Exception(mapFirestoreException(e), e))
         } catch (e: FirebaseNetworkException) {
             Result.failure(Exception("Network error. Please check your internet connection and try again.", e))
+        } catch (e: NotAuthenticatedException) {
+            Result.failure(e)
         } catch (e: Exception) {
             Result.failure(Exception("Failed to update note: ${e.localizedMessage ?: "Unknown error"}", e))
         }
@@ -97,27 +107,36 @@ class NotesRepository(
             Result.failure(Exception(mapFirestoreException(e), e))
         } catch (e: FirebaseNetworkException) {
             Result.failure(Exception("Network error. Please check your internet connection and try again.", e))
+        } catch (e: NotAuthenticatedException) {
+            Result.failure(e)
         } catch (e: Exception) {
             Result.failure(Exception("Failed to delete note: ${e.localizedMessage ?: "Unknown error"}", e))
         }
     }
 
     /**
-     * Realtime stream of all notes, newest first. Backs the Notes screen so
-     * changes made on any signed-in device appear automatically.
+     * Realtime stream of all notes for the signed-in account, newest first.
+     * Backs the Notes screen so changes made on any device signed into the
+     * same Google account appear automatically.
      */
     fun observeNotes(): Flow<List<Note>> = callbackFlow {
-        val registration: ListenerRegistration = notesCollection
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
+        val registration: ListenerRegistration
+        try {
+            registration = notesCollection
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        close(error)
+                        return@addSnapshotListener
+                    }
+                    val notes = snapshot?.documents?.mapNotNull { it.toObject(Note::class.java) }
+                        ?: emptyList()
+                    trySend(notes)
                 }
-                val notes = snapshot?.documents?.mapNotNull { it.toObject(Note::class.java) }
-                    ?: emptyList()
-                trySend(notes)
-            }
+        } catch (e: Exception) {
+            close(e)
+            return@callbackFlow
+        }
 
         awaitClose { registration.remove() }
     }

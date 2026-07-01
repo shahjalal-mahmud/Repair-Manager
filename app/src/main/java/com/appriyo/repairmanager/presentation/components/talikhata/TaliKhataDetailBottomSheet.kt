@@ -1,6 +1,7 @@
 package com.appriyo.repairmanager.presentation.components.talikhata
 
 import android.net.Uri
+import android.widget.ImageView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,8 +17,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -27,10 +28,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import androidx.compose.ui.viewinterop.AndroidView
 import com.appriyo.repairmanager.data.model.TaliKhataEntry
 import com.appriyo.repairmanager.data.model.TaliKhataHistoryEntry
 
@@ -93,7 +93,7 @@ fun TaliKhataDetailBottomSheet(
                 modifier = Modifier.padding(top = 8.dp)
             )
 
-            Divider(modifier = Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             Text(
                 text = "Photos",
@@ -106,7 +106,7 @@ fun TaliKhataDetailBottomSheet(
                 onAddPhotoClick = onAddPhotoClick
             )
 
-            Divider(modifier = Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             TaliKhataHistoryList(history = history)
         }
@@ -151,12 +151,18 @@ private fun AddPhotoTile(onClick: () -> Unit) {
 
 @Composable
 private fun PhotoTile(uri: Uri) {
-    AsyncImage(
-        model = uri,
-        contentDescription = "Attached photo",
-        contentScale = ContentScale.Crop,
+    AndroidView(
+        factory = { context ->
+            ImageView(context).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setImageURI(uri)
+            }
+        },
         modifier = Modifier
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(8.dp)),
+        update = { imageView ->
+            imageView.setImageURI(uri)
+        }
     )
 }

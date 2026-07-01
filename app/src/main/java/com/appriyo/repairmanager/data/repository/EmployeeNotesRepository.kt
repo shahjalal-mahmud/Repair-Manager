@@ -3,6 +3,7 @@ package com.appriyo.repairmanager.data.repository
 
 import com.appriyo.repairmanager.data.model.EmployeeNote
 import com.appriyo.repairmanager.data.model.EmployeeNotesFirestorePaths
+import com.appriyo.repairmanager.presentation.utils.LedgerDateUtils
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -13,10 +14,12 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import java.util.Date
 
 /**
- * Repository for the "employeeNotes" collection - a manual notebook of repair
- * jobs and their payment/profit. Not an employee-management system.
+ * Repository for the "employeeNotes" collection - the Daily Work Ledger's
+ * data source. Each entry is a manual repair job tagged with who did it
+ * (A = Shop Owner, B = Employee), its payment, and its profit.
  *
  * **Data isolation:** Lives at users/{uid}/employeeNotes so each Google
  * account only ever sees its own entries, while multiple devices signed into
@@ -36,6 +39,7 @@ class EmployeeNotesRepository(
         description: String,
         totalPayment: Double,
         profit: Double,
+        workerType: String,
         createdBy: String
     ): Result<EmployeeNote> {
         return try {
@@ -47,6 +51,7 @@ class EmployeeNotesRepository(
                 "description" to description,
                 "totalPayment" to totalPayment,
                 "profit" to profit,
+                "workerType" to workerType,
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp(),
                 "createdBy" to createdBy
@@ -61,6 +66,7 @@ class EmployeeNotesRepository(
                     description = description,
                     totalPayment = totalPayment,
                     profit = profit,
+                    workerType = workerType,
                     createdAt = null,
                     updatedAt = null,
                     createdBy = createdBy
@@ -82,7 +88,8 @@ class EmployeeNotesRepository(
         title: String,
         description: String,
         totalPayment: Double,
-        profit: Double
+        profit: Double,
+        workerType: String
     ): Result<Unit> {
         return try {
             val updates = hashMapOf<String, Any?>(
@@ -90,6 +97,7 @@ class EmployeeNotesRepository(
                 "description" to description,
                 "totalPayment" to totalPayment,
                 "profit" to profit,
+                "workerType" to workerType,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
 
@@ -142,6 +150,44 @@ class EmployeeNotesRepository(
 
         awaitClose { registration.remove() }
     }
+
+    // ---------------------------------------------------------------------
+    // Local, in-memory filtering helpers.
+    //
+    // observeEmployeeNotes() already streams every note, newest first, from a
+    // single realtime listener. Rather than issuing a new composite Firestore
+    // query (and needing new indexes) every time the shop owner switches the
+    // date filter, we filter that one stream locally. This keeps the realtime
+    // listener simple while still giving instant, efficient filtering for
+    // Today / Yesterday / Week / Month / Custom date / Custom range, entirely
+    // in memory, with no extra network round-trips.
+    //
+    // A note whose createdAt hasn't been resolved by the server yet (a very
+    // recent local write, still pending) is treated as "now" so it shows up
+    // immediately in Today/current-period views instead of vanishing until
+    // the server timestamp round-trips back.
+    // ---------------------------------------------------------------------
+
+    fun filterForToday(notes: List<EmployeeNote>): List<EmployeeNote> =
+        filterForDate(notes, Date())
+
+    fun filterForDate(notes: List<EmployeeNote>, date: Date): List<EmployeeNote> =
+        filterForRange(notes, date, date)
+
+    fun filterForRange(notes: List<EmployeeNote>, startDate: Date, endDate: Date): List<EmployeeNote> {
+        val startMillis = LedgerDateUtils.startOfDay(startDate).time
+        val endMillis = LedgerDateUtils.endOfDay(endDate).time
+        return notes.filter { note ->
+            val time = (note.createdAt ?: Date()).time
+            time in startMillis..endMillis
+        }
+    }
+
+    fun filterForWeek(notes: List<EmployeeNote>, anchor: Date = Date()): List<EmployeeNote> =
+        filterForRange(notes, LedgerDateUtils.startOfWeek(anchor), LedgerDateUtils.endOfWeek(anchor))
+
+    fun filterForMonth(notes: List<EmployeeNote>, anchor: Date = Date()): List<EmployeeNote> =
+        filterForRange(notes, LedgerDateUtils.startOfMonth(anchor), LedgerDateUtils.endOfMonth(anchor))
 
     private fun mapFirestoreException(e: FirebaseFirestoreException): String {
         return when (e.code) {

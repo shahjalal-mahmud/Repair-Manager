@@ -21,6 +21,7 @@ import com.appriyo.repairmanager.presentation.viewmodel.MainViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.NotesViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.PrintViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.SmsSettingsViewModel
+import com.appriyo.repairmanager.presentation.viewmodel.TaliKhataViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import org.koin.android.ext.koin.androidContext
@@ -60,4 +61,5 @@ val appModule = module {
     viewModel { NotesViewModel(get(), get()) }
     viewModel { EmployeeNotesViewModel(get(), get()) }
     viewModel { SmsSettingsViewModel(get(), get(), get()) }
+    viewModel { TaliKhataViewModel(get(), get()) }
 }

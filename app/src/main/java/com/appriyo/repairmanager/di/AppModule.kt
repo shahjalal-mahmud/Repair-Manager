@@ -4,6 +4,7 @@ package com.appriyo.repairmanager.di
 import com.appriyo.repairmanager.data.repository.AppSettingsRepository
 import com.appriyo.repairmanager.data.repository.AuthRepository
 import com.appriyo.repairmanager.data.repository.EmployeeNotesRepository
+import com.appriyo.repairmanager.data.repository.FirestoreUserProvider
 import com.appriyo.repairmanager.data.repository.NotesRepository
 import com.appriyo.repairmanager.data.repository.RepairRepository
 import com.appriyo.repairmanager.data.repository.SmsLogRepository
@@ -20,6 +21,7 @@ import com.appriyo.repairmanager.presentation.viewmodel.MainViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.NotesViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.PrintViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.SmsSettingsViewModel
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
@@ -28,14 +30,19 @@ import org.koin.dsl.module
 val appModule = module {
     // Firebase
     single { FirebaseFirestore.getInstance() }
+    single { FirebaseAuth.getInstance() }
+
+    // Resolves users/{uid} for every repository - the single source of truth
+    // for per-account Firestore data isolation.
+    single { FirestoreUserProvider(get(), get()) }
 
     // Repositories
     single { AuthRepository(get()) }
-    single { RepairRepository(get()) }
-    single { NotesRepository(get()) }
-    single { EmployeeNotesRepository(get()) }
-    single { AppSettingsRepository(get()) }
-    single { SmsLogRepository(get()) }
+    single { RepairRepository(get(), get()) }
+    single { NotesRepository(get(), get()) }
+    single { EmployeeNotesRepository(get(), get()) }
+    single { AppSettingsRepository(get(), get()) }
+    single { SmsLogRepository(get(), get()) }
 
     // SMS infrastructure
     single { DeviceIdProvider(androidContext()) }

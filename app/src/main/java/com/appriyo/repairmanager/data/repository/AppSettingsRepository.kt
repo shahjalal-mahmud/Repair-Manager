@@ -13,23 +13,37 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
 /**
- * Manages the single shared appSettings/global document that designates the
+ * Manages the users/{uid}/appSettings/global document that designates the
  * SMS-sending device and its preferred SIM slot.
+ *
+ * **Data isolation:** Each Google account (repair shop) has its own settings
+ * document. Multiple devices signed into the same account share this single
+ * document, so whichever device is designated the SMS sender is visible to
+ * all devices on that account.
  */
-class AppSettingsRepository(private val firestore: FirebaseFirestore) {
+class AppSettingsRepository(
+    private val firestore: FirebaseFirestore,
+    private val userProvider: FirestoreUserProvider
+) {
 
     private val settingsDocRef
-        get() = firestore
+        get() = userProvider.currentUserDocument()
             .collection(SmsFirestorePaths.APP_SETTINGS_COLLECTION)
             .document(SmsFirestorePaths.GLOBAL_SETTINGS_DOC)
 
     fun observeSettings(): Flow<AppSettings?> = callbackFlow {
-        val registration: ListenerRegistration = settingsDocRef.addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                close(error)
-                return@addSnapshotListener
+        val registration: ListenerRegistration
+        try {
+            registration = settingsDocRef.addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                trySend(snapshot?.toObject(AppSettings::class.java))
             }
-            trySend(snapshot?.toObject(AppSettings::class.java))
+        } catch (e: Exception) {
+            close(e)
+            return@callbackFlow
         }
         awaitClose { registration.remove() }
     }

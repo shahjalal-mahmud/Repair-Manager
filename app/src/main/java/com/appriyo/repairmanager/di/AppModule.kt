@@ -8,6 +8,7 @@ import com.appriyo.repairmanager.data.repository.FirestoreUserProvider
 import com.appriyo.repairmanager.data.repository.NotesRepository
 import com.appriyo.repairmanager.data.repository.RepairRepository
 import com.appriyo.repairmanager.data.repository.SmsLogRepository
+import com.appriyo.repairmanager.data.repository.TaliKhataRepository
 import com.appriyo.repairmanager.data.sms.DeviceIdProvider
 import com.appriyo.repairmanager.data.sms.SmsAutoSendManager
 import com.appriyo.repairmanager.data.sms.SmsSender
@@ -44,6 +45,7 @@ val appModule = module {
     single { EmployeeNotesRepository(get(), get()) }
     single { AppSettingsRepository(get(), get()) }
     single { SmsLogRepository(get(), get()) }
+    single { TaliKhataRepository(get(), get()) }
 
     // SMS infrastructure
     single { DeviceIdProvider(androidContext()) }

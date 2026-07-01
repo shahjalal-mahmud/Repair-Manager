@@ -19,15 +19,19 @@ import java.util.Locale
 /**
  * Repository for managing repair records in Firestore.
  *
+ * **Data isolation:** All collections used by this repository now live
+ * beneath the currently authenticated user's private document:
+ *   users/{uid}/repairs
+ *   users/{uid}/repairCounter/counter
+ * This guarantees every Google account (i.e. every repair shop) only ever
+ * reads/writes its own data, while multiple devices signed into the SAME
+ * account continue to share and sync the same underlying documents.
+ *
  * **Key Features:**
  * - Transactional serial number generation (prevents duplicate IDs)
  * - Real-time sync across devices via Flow APIs
  * - Immutable fields: id, serialNumber, createdAt, createdBy
  * - Optimized status updates (partial updates)
- *
- * **Collections Used:**
- * - "repairs": Main collection for repair records
- * - "counters": Single document for atomic serial number generation
  *
  * **Thread Safety:** All operations are suspend functions and should be called
  * from a coroutine scope (e.g., ViewModelScope).
@@ -36,17 +40,19 @@ import java.util.Locale
  * @since 1.0.0
  */
 class RepairRepository(
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val userProvider: FirestoreUserProvider
 ) {
 
     // ======================== COLLECTION REFERENCES ========================
 
     private val repairsCollection
-        get() = firestore.collection(FirestorePaths.REPAIRS_COLLECTION)
+        get() = userProvider.currentUserDocument()
+            .collection(FirestorePaths.REPAIRS_COLLECTION)
 
     private val counterDocRef
-        get() = firestore
-            .collection(FirestorePaths.COUNTERS_COLLECTION)
+        get() = userProvider.currentUserDocument()
+            .collection(FirestorePaths.REPAIR_COUNTER_COLLECTION)
             .document(FirestorePaths.REPAIR_COUNTER_DOC)
 
     // ======================== CRUD OPERATIONS ========================
@@ -56,7 +62,7 @@ class RepairRepository(
      *
      * **Atomicity:** Serial generation and document creation happen in a single
      * Firestore transaction, ensuring consistency even with concurrent writes
-     * from multiple devices.
+     * from multiple devices signed into the same account.
      *
      * @param customerName Full name of the customer
      * @param phoneNumber Contact phone number
@@ -107,14 +113,15 @@ class RepairRepository(
         videoCount: Int = 0
     ): Result<Repair> = runCatching {
         val newRepairRef = repairsCollection.document()
+        val counterRef = counterDocRef
 
         val generatedSerial = firestore.runTransaction { transaction ->
-            val counterSnapshot = transaction.get(counterDocRef)
+            val counterSnapshot = transaction.get(counterRef)
             val lastSerial = counterSnapshot.getLong(FirestorePaths.LAST_SERIAL_FIELD) ?: 0L
             val newSerialNumber = lastSerial + 1
 
             transaction.set(
-                counterDocRef,
+                counterRef,
                 mapOf(FirestorePaths.LAST_SERIAL_FIELD to newSerialNumber)
             )
 
@@ -359,27 +366,34 @@ class RepairRepository(
     // ======================== REALTIME STREAMS ========================
 
     /**
-     * Provides a real-time stream of all repair records.
+     * Provides a real-time stream of all repair records for the signed-in
+     * account.
      *
      * **Usage:** Subscribe in the Customer List screen for automatic updates
-     * across all signed-in devices. Changes appear without manual refresh.
+     * across all devices signed into the same Google account.
      *
      * **Ordering:** Newest records first (ordered by createdAt descending).
      *
      * @return Flow emitting the complete list of repairs on every change
      */
     fun observeRepairs(): Flow<List<Repair>> = callbackFlow {
-        val registration: ListenerRegistration = repairsCollection
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
+        val registration: ListenerRegistration
+        try {
+            registration = repairsCollection
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        close(error)
+                        return@addSnapshotListener
+                    }
+                    val repairs = snapshot?.documents?.mapNotNull { it.toObject(Repair::class.java) }
+                        ?: emptyList()
+                    trySend(repairs)
                 }
-                val repairs = snapshot?.documents?.mapNotNull { it.toObject(Repair::class.java) }
-                    ?: emptyList()
-                trySend(repairs)
-            }
+        } catch (e: Exception) {
+            close(e)
+            return@callbackFlow
+        }
 
         awaitClose { registration.remove() }
     }
@@ -388,20 +402,26 @@ class RepairRepository(
      * Provides a real-time stream for a single repair record.
      *
      * **Usage:** Subscribe in the Customer Details screen to reflect status
-     * changes made on any device.
+     * changes made on any device signed into the same account.
      *
      * @param repairId The ID of the repair to observe
      * @return Flow emitting the repair record or null if not found
      */
     fun observeRepair(repairId: String): Flow<Repair?> = callbackFlow {
-        val registration: ListenerRegistration = repairsCollection.document(repairId)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
+        val registration: ListenerRegistration
+        try {
+            registration = repairsCollection.document(repairId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        close(error)
+                        return@addSnapshotListener
+                    }
+                    trySend(snapshot?.toObject(Repair::class.java))
                 }
-                trySend(snapshot?.toObject(Repair::class.java))
-            }
+        } catch (e: Exception) {
+            close(e)
+            return@callbackFlow
+        }
 
         awaitClose { registration.remove() }
     }
@@ -415,20 +435,26 @@ class RepairRepository(
      * @return Flow emitting changed repair records
      */
     fun observeRepairChanges(): Flow<List<Repair>> = callbackFlow {
-        val registration: ListenerRegistration = repairsCollection
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
+        val registration: ListenerRegistration
+        try {
+            registration = repairsCollection
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        close(error)
+                        return@addSnapshotListener
+                    }
+                    val changed = snapshot?.documentChanges
+                        ?.filter { it.type == DocumentChange.Type.ADDED || it.type == DocumentChange.Type.MODIFIED }
+                        ?.mapNotNull { it.document.toObject(Repair::class.java) }
+                        ?: emptyList()
+                    if (changed.isNotEmpty()) {
+                        trySend(changed)
+                    }
                 }
-                val changed = snapshot?.documentChanges
-                    ?.filter { it.type == DocumentChange.Type.ADDED || it.type == DocumentChange.Type.MODIFIED }
-                    ?.mapNotNull { it.document.toObject(Repair::class.java) }
-                    ?: emptyList()
-                if (changed.isNotEmpty()) {
-                    trySend(changed)
-                }
-            }
+        } catch (e: Exception) {
+            close(e)
+            return@callbackFlow
+        }
 
         awaitClose { registration.remove() }
     }
@@ -446,7 +472,8 @@ class RepairRepository(
     }
 
     /**
-     * Maps low-level Firestore exceptions to user-friendly error messages.
+     * Maps low-level Firestore exceptions (and the local
+     * [NotAuthenticatedException]) to user-friendly error messages.
      *
      * @param e The caught exception
      * @return Result containing an error message
@@ -474,6 +501,9 @@ class RepairRepository(
             }
             is FirebaseNetworkException -> {
                 Result.failure(Exception("Network error. Please check your internet connection and try again.", e))
+            }
+            is NotAuthenticatedException -> {
+                Result.failure(e)
             }
             else -> {
                 Result.failure(Exception("Failed to complete operation: ${e.localizedMessage ?: "Unknown error"}", e))

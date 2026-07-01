@@ -1,6 +1,5 @@
 package com.appriyo.repairmanager.presentation.screens.talikhata
 
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.CircularProgressIndicator
@@ -125,7 +125,12 @@ fun TaliKhataScreen(
                 else -> {
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(vertical = 8.dp, bottom = 96.dp)
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            top = 8.dp,
+                            end = 16.dp,
+                            bottom = 96.dp
+                        )
                     ) {
                         items(uiState.filteredEntries, key = { it.id }) { entry ->
                             TaliKhataEntryCard(
@@ -157,7 +162,7 @@ fun TaliKhataScreen(
             TaliKhataDetailBottomSheet(
                 entry = entry,
                 history = uiState.history,
-                photoUris = emptyList<Uri>(), // supplied by ViewModel/MediaRepository in real wiring
+                photoUris = emptyList(), // supplied by ViewModel/MediaRepository in real wiring
                 onDismiss = { viewModel.onDismissDetail() },
                 onAddPhotoClick = { viewModel.onAddPhotoClick(entry) }
             )

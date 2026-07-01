@@ -17,13 +17,19 @@ import kotlinx.coroutines.tasks.await
 /**
  * Repository for the "employeeNotes" collection - a manual notebook of repair
  * jobs and their payment/profit. Not an employee-management system.
+ *
+ * **Data isolation:** Lives at users/{uid}/employeeNotes so each Google
+ * account only ever sees its own entries, while multiple devices signed into
+ * the same account continue to sync in real time.
  */
 class EmployeeNotesRepository(
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val userProvider: FirestoreUserProvider
 ) {
 
     private val employeeNotesCollection
-        get() = firestore.collection(EmployeeNotesFirestorePaths.EMPLOYEE_NOTES_COLLECTION)
+        get() = userProvider.currentUserDocument()
+            .collection(EmployeeNotesFirestorePaths.EMPLOYEE_NOTES_COLLECTION)
 
     suspend fun createEmployeeNote(
         title: String,
@@ -64,6 +70,8 @@ class EmployeeNotesRepository(
             Result.failure(Exception(mapFirestoreException(e), e))
         } catch (e: FirebaseNetworkException) {
             Result.failure(Exception("Network error. Please check your internet connection and try again.", e))
+        } catch (e: NotAuthenticatedException) {
+            Result.failure(e)
         } catch (e: Exception) {
             Result.failure(Exception("Failed to save employee note: ${e.localizedMessage ?: "Unknown error"}", e))
         }
@@ -91,6 +99,8 @@ class EmployeeNotesRepository(
             Result.failure(Exception(mapFirestoreException(e), e))
         } catch (e: FirebaseNetworkException) {
             Result.failure(Exception("Network error. Please check your internet connection and try again.", e))
+        } catch (e: NotAuthenticatedException) {
+            Result.failure(e)
         } catch (e: Exception) {
             Result.failure(Exception("Failed to update employee note: ${e.localizedMessage ?: "Unknown error"}", e))
         }
@@ -104,23 +114,31 @@ class EmployeeNotesRepository(
             Result.failure(Exception(mapFirestoreException(e), e))
         } catch (e: FirebaseNetworkException) {
             Result.failure(Exception("Network error. Please check your internet connection and try again.", e))
+        } catch (e: NotAuthenticatedException) {
+            Result.failure(e)
         } catch (e: Exception) {
             Result.failure(Exception("Failed to delete employee note: ${e.localizedMessage ?: "Unknown error"}", e))
         }
     }
 
     fun observeEmployeeNotes(): Flow<List<EmployeeNote>> = callbackFlow {
-        val registration: ListenerRegistration = employeeNotesCollection
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
+        val registration: ListenerRegistration
+        try {
+            registration = employeeNotesCollection
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        close(error)
+                        return@addSnapshotListener
+                    }
+                    val notes = snapshot?.documents?.mapNotNull { it.toObject(EmployeeNote::class.java) }
+                        ?: emptyList()
+                    trySend(notes)
                 }
-                val notes = snapshot?.documents?.mapNotNull { it.toObject(EmployeeNote::class.java) }
-                    ?: emptyList()
-                trySend(notes)
-            }
+        } catch (e: Exception) {
+            close(e)
+            return@callbackFlow
+        }
 
         awaitClose { registration.remove() }
     }

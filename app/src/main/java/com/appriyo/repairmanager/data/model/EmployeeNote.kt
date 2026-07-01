@@ -6,11 +6,13 @@ import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
 
 /**
- * Firestore-compatible data class representing a manual repair-job/profit note.
+ * Firestore-compatible data class representing a manual repair-job/profit note
+ * that powers the Daily Work Ledger.
  *
  * NOTE: This is NOT employee management. There is no employee account,
  * authentication, attendance, salary, or role system involved - it is simply
- * a notebook entry recording a job, its total payment, and its profit.
+ * a ledger entry recording a job, who did it (A = Shop Owner, B = Employee),
+ * its total payment, and its profit.
  *
  * Collection: "employeeNotes"
  * Document ID: Firestore auto-generated ID (mirrored into [id] for convenience)
@@ -30,6 +32,16 @@ data class EmployeeNote(
 
     @get:PropertyName("profit") @set:PropertyName("profit")
     var profit: Double = 0.0,
+
+    /**
+     * "A" (Shop Owner) or "B" (Employee). Never null/empty - mandatory on every
+     * entry. Existing documents written before this field existed will simply
+     * be missing it in Firestore, which Firestore's POJO mapping leaves at
+     * this default ("A") rather than overwriting it - so old data keeps working
+     * without any migration.
+     */
+    @get:PropertyName("workerType") @set:PropertyName("workerType")
+    var workerType: String = WorkerType.A.storageValue,
 
     @ServerTimestamp
     @get:PropertyName("createdAt") @set:PropertyName("createdAt")

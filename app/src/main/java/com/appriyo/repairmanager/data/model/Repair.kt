@@ -106,9 +106,18 @@ object SecurityType {
     val ALL = listOf(NONE, PASSWORD, PATTERN, BOTH)
 }
 
+/**
+ * Collection/document names used UNDER users/{uid} - never as top-level
+ * Firestore collections anymore. RepairRepository always resolves these
+ * relative to FirestoreUserProvider.currentUserDocument().
+ */
 object FirestorePaths {
     const val REPAIRS_COLLECTION = "repairs"
-    const val COUNTERS_COLLECTION = "counters"
-    const val REPAIR_COUNTER_DOC = "repairCounter"
+
+    // Previously: top-level "counters" collection with a "repairCounter" doc.
+    // Now: users/{uid}/repairCounter/counter
+    const val REPAIR_COUNTER_COLLECTION = "repairCounter"
+    const val REPAIR_COUNTER_DOC = "counter"
+
     const val LAST_SERIAL_FIELD = "lastSerial"
 }

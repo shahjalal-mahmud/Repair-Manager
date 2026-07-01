@@ -1,4 +1,4 @@
-package com.appriyo.repairmanager.presentation.screens.talikhata
+package com.appriyo.repairmanager.presentation.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

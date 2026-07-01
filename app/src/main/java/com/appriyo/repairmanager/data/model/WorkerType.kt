@@ -13,6 +13,6 @@ enum class WorkerType(val storageValue: String, val displayLabel: String) {
     companion object {
         /** Old Firestore documents written before this field existed default to A. */
         fun fromStorageValue(value: String?): WorkerType =
-            values().firstOrNull { it.storageValue == value } ?: A
+            WorkerType.entries.firstOrNull { it.storageValue == value } ?: A
     }
 }

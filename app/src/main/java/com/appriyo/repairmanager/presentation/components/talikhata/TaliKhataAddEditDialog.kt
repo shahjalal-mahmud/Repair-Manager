@@ -7,8 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Divider
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -114,7 +114,7 @@ fun TaliKhataAddEditDialog(
                 )
 
                 if (isEditing) {
-                    Divider()
+                    HorizontalDivider()
                     Text(
                         text = "Current Balance: ${formatCurrency(currentBalance)}",
                         style = MaterialTheme.typography.bodyMedium

@@ -6,6 +6,7 @@ import com.appriyo.repairmanager.data.model.TaliKhataEntry
 import com.appriyo.repairmanager.data.model.TaliKhataType
 import com.appriyo.repairmanager.data.repository.TaliKhataRepository
 import com.appriyo.repairmanager.presentation.state.TaliKhataUiState
+import com.appriyo.repairmanager.presentation.utils.buildTaliKhataSms
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -23,7 +24,6 @@ import kotlinx.coroutines.launch
  */
 sealed class TaliKhataEvent {
     data class OpenSms(val phoneNumber: String, val message: String) : TaliKhataEvent()
-    data class OpenAddPhoto(val entry: TaliKhataEntry) : TaliKhataEvent()
 }
 
 /**
@@ -200,22 +200,10 @@ class TaliKhataViewModel(
         _uiState.update { it.copy(selectedEntry = null, history = emptyList()) }
     }
 
-    // ---- Photos / SMS (delegated to the UI layer via events; no Context here) ----
-
-    fun onPhotosClick(entry: TaliKhataEntry) {
-        onEntryClick(entry)
-    }
-
-    fun onAddPhotoClick(entry: TaliKhataEntry) {
-        viewModelScope.launch { _events.emit(TaliKhataEvent.OpenAddPhoto(entry)) }
-    }
+    // ---- SMS (delegated to the UI layer via events; no Context here) ----
 
     fun onSmsClick(entry: TaliKhataEntry) {
-        val message = if (entry.typeEnum == TaliKhataType.YOU_OWE) {
-            "Hi ${entry.personName}, just a reminder that I owe you ${entry.balance}. Thank you!"
-        } else {
-            "Hi ${entry.personName}, this is a reminder that you owe ${entry.balance}. Thank you!"
-        }
+        val message = buildTaliKhataSms(entry)
         viewModelScope.launch { _events.emit(TaliKhataEvent.OpenSms(entry.phoneNumber, message)) }
     }
 

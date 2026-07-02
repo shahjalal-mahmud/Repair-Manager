@@ -1,6 +1,7 @@
 // app/src/main/java/com/appriyo/repairmanager/di/AppModule.kt
 package com.appriyo.repairmanager.di
 
+import com.appriyo.repairmanager.data.media.MediaRepository
 import com.appriyo.repairmanager.data.media.MediaStorageManager
 import com.appriyo.repairmanager.data.media.NoteMediaStore
 import com.appriyo.repairmanager.data.repository.AppSettingsRepository
@@ -51,6 +52,7 @@ val appModule = module {
 
     // Local-only media (never synced to Firestore)
     single { MediaStorageManager(androidContext()) }
+    single { MediaRepository(androidContext()) }
     single { NoteMediaStore(androidContext()) }
 
     // SMS infrastructure

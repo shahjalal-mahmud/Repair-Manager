@@ -17,10 +17,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.appriyo.repairmanager.data.model.TaliKhataEntry
 import com.appriyo.repairmanager.presentation.components.talikhata.TaliKhataAddEditDialog
@@ -31,6 +33,8 @@ import com.appriyo.repairmanager.presentation.components.talikhata.TaliKhataFilt
 import com.appriyo.repairmanager.presentation.components.talikhata.TaliKhataSearchField
 import com.appriyo.repairmanager.presentation.components.talikhata.TaliKhataSortMenu
 import com.appriyo.repairmanager.presentation.components.talikhata.TaliKhataSummaryCards
+import com.appriyo.repairmanager.presentation.utils.openSmsComposer
+import com.appriyo.repairmanager.presentation.viewmodel.TaliKhataEvent
 import com.appriyo.repairmanager.presentation.viewmodel.TaliKhataViewModel
 import org.koin.androidx.compose.koinViewModel
 
@@ -38,24 +42,33 @@ import org.koin.androidx.compose.koinViewModel
  * Main TaliKhata screen.
  *
  * This composable is UI-only: it reads [TaliKhataViewModel.uiState] and
- * forwards every user action to the ViewModel. No Firestore, media, or SMS
- * logic lives here.
+ * forwards every user action to the ViewModel. No Firestore or SMS logic
+ * lives here.
  *
- * NOTE ON VIEWMODEL API: the exact method names below (onSearchQueryChange,
- * onFilterChange, onSortOptionChange, onAddEntryClick, onEditEntryClick,
- * onDeleteEntryClick, onEntryClick, onDismissAddEditDialog, onSaveEntry,
- * onDismissDetail, onAddPhotoClick, onPhotosClick, onSmsClick) are the
- * expected surface this screen needs from TaliKhataViewModel. If your actual
- * ViewModel uses different names, rename the calls below to match - the
- * screen makes no other assumptions about ViewModel internals.
+ * The screen collects one-off events from [TaliKhataViewModel.events]:
+ *   - `OpenSms` → forwards to `openSmsComposer(...)` which opens the device's
+ *                 default SMS app with the conversation and pre-written body.
+ *                 The user reviews and taps Send manually.
  */
 @Composable
 fun TaliKhataScreen(
     viewModel: TaliKhataViewModel = koinViewModel(),
-    onPhotosClick: (TaliKhataEntry) -> Unit = { viewModel.onPhotosClick(it) },
     onSmsClick: (TaliKhataEntry) -> Unit = { viewModel.onSmsClick(it) }
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            if (event is TaliKhataEvent.OpenSms) {
+                openSmsComposer(
+                    context = context,
+                    phoneNumber = event.phoneNumber,
+                    message = event.message
+                )
+            }
+        }
+    }
 
     Scaffold(
         floatingActionButton = {
@@ -136,7 +149,6 @@ fun TaliKhataScreen(
                             TaliKhataEntryCard(
                                 entry = entry,
                                 onClick = { viewModel.onEntryClick(entry) },
-                                onPhotosClick = { onPhotosClick(entry) },
                                 onSmsClick = { onSmsClick(entry) },
                                 onEditClick = { viewModel.onEditEntryClick(entry) },
                                 onDeleteClick = { viewModel.onDeleteEntryClick(entry) }
@@ -162,9 +174,7 @@ fun TaliKhataScreen(
             TaliKhataDetailBottomSheet(
                 entry = entry,
                 history = uiState.history,
-                photoUris = emptyList(), // supplied by ViewModel/MediaRepository in real wiring
-                onDismiss = { viewModel.onDismissDetail() },
-                onAddPhotoClick = { viewModel.onAddPhotoClick(entry) }
+                onDismiss = { viewModel.onDismissDetail() }
             )
         }
     }

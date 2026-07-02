@@ -23,17 +23,19 @@ fun BottomNavigationBar(
         BottomNavItem.AddCustomer,
         BottomNavItem.Customers,
         BottomNavItem.Notes,
-        BottomNavItem.Employee
+        BottomNavItem.Employee,
+        BottomNavItem.TaliKhata
     )
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Hide bottom nav for detail screens
+    // Hide bottom nav for detail screens and auth screen
     val shouldShowBottomNav = when (currentRoute) {
         Screen.CustomerDetails.route -> false
         Screen.EditRepair.route -> false
         Screen.Login.route -> false
+        Screen.SmsSettings.route -> false
         else -> true
     }
 

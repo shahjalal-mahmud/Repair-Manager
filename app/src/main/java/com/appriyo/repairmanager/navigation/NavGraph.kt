@@ -10,6 +10,7 @@ import androidx.navigation.navArgument
 import com.appriyo.repairmanager.presentation.screens.AddRepairScreen
 import com.appriyo.repairmanager.presentation.screens.CustomerDetailsScreen
 import com.appriyo.repairmanager.presentation.screens.CustomerListScreen
+import com.appriyo.repairmanager.presentation.screens.DashboardScreen
 import com.appriyo.repairmanager.presentation.screens.EditRepairScreen
 import com.appriyo.repairmanager.presentation.screens.EmployeeScreen
 import com.appriyo.repairmanager.presentation.screens.LoginScreen
@@ -34,6 +35,10 @@ fun NavGraph(
         }
 
         // Bottom Navigation Screens
+        composable(Screen.Dashboard.route) {
+            DashboardScreen(navController)
+        }
+
         composable(Screen.AddRepair.route) {
             AddRepairScreen(navController)
         }

@@ -20,11 +20,11 @@ fun BottomNavigationBar(
     modifier: Modifier = Modifier
 ) {
     val items = listOf(
+        BottomNavItem.Home,
         BottomNavItem.AddCustomer,
         BottomNavItem.Customers,
         BottomNavItem.Notes,
-        BottomNavItem.Employee,
-        BottomNavItem.TaliKhata
+        BottomNavItem.Employee
     )
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()

@@ -13,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inbox
-import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -40,7 +39,6 @@ import java.util.Locale
 fun TaliKhataEntryCard(
     entry: TaliKhataEntry,
     onClick: () -> Unit,
-    onPhotosClick: () -> Unit,
     onSmsClick: () -> Unit,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit,
@@ -104,9 +102,6 @@ fun TaliKhataEntryCard(
                     .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.End
             ) {
-                IconButton(onClick = onPhotosClick) {
-                    Icon(Icons.Default.PhotoLibrary, contentDescription = "Photos")
-                }
                 IconButton(onClick = onSmsClick) {
                     Icon(Icons.Default.Sms, contentDescription = "SMS")
                 }

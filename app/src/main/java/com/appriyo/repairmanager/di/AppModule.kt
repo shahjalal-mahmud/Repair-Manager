@@ -1,6 +1,8 @@
 // app/src/main/java/com/appriyo/repairmanager/di/AppModule.kt
 package com.appriyo.repairmanager.di
 
+import com.appriyo.repairmanager.data.media.MediaStorageManager
+import com.appriyo.repairmanager.data.media.NoteMediaStore
 import com.appriyo.repairmanager.data.repository.AppSettingsRepository
 import com.appriyo.repairmanager.data.repository.AuthRepository
 import com.appriyo.repairmanager.data.repository.EmployeeNotesRepository
@@ -47,6 +49,10 @@ val appModule = module {
     single { SmsLogRepository(get(), get()) }
     single { TaliKhataRepository(get(), get()) }
 
+    // Local-only media (never synced to Firestore)
+    single { MediaStorageManager(androidContext()) }
+    single { NoteMediaStore(androidContext()) }
+
     // SMS infrastructure
     single { DeviceIdProvider(androidContext()) }
     single { SmsSender(androidContext()) }
@@ -60,7 +66,7 @@ val appModule = module {
     viewModel { CustomerListViewModel(get(), get()) }
     viewModel { CustomerDetailsViewModel(get(), get()) }
     viewModel { EditRepairViewModel(get()) }
-    viewModel { NotesViewModel(get(), get()) }
+    viewModel { NotesViewModel(get(), get(), get(), get()) }
     viewModel { EmployeeNotesViewModel(get(), get()) }
     viewModel { SmsSettingsViewModel(get(), get(), get()) }
     viewModel { TaliKhataViewModel(get(), get()) }

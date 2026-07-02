@@ -1,7 +1,16 @@
 // app/src/main/java/com/appriyo/repairmanager/presentation/screens/NotesScreen.kt
 package com.appriyo.repairmanager.presentation.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,20 +19,26 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.AlertDialog
@@ -31,11 +46,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -49,18 +67,33 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import com.appriyo.repairmanager.data.media.MediaAttachment
+import com.appriyo.repairmanager.data.media.MediaStorageManager
+import com.appriyo.repairmanager.data.media.MediaType
+import com.appriyo.repairmanager.data.media.NoteMediaStore
+import com.appriyo.repairmanager.data.media.loadMediaThumbnail
 import com.appriyo.repairmanager.data.model.Note
 import com.appriyo.repairmanager.presentation.components.DeleteConfirmationDialog
 import com.appriyo.repairmanager.presentation.components.TopToastHost
 import com.appriyo.repairmanager.presentation.viewmodel.NotesViewModel
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import java.io.File
+
+private const val MAX_NOTE_PHOTOS = 3
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -144,6 +177,7 @@ fun NotesScreen(
                             items(filteredNotes, key = { it.id }) { note ->
                                 NoteCard(
                                     note = note,
+                                    mediaVersion = uiState.mediaRefreshTick,
                                     onEdit = { viewModel.openEditDialog(note) },
                                     onDelete = { viewModel.requestDeleteNote(note) }
                                 )
@@ -165,9 +199,13 @@ fun NotesScreen(
         NoteEditDialog(
             initialTitle = uiState.editingNote?.title ?: "",
             initialDescription = uiState.editingNote?.description ?: "",
+            attachments = uiState.editingAttachments,
+            draftId = uiState.currentDraftId,
             isSaving = uiState.isSaving,
             titleError = uiState.titleError,
             isEditing = uiState.editingNote != null,
+            onAddAttachment = { viewModel.addMediaAttachment(it) },
+            onRemoveAttachment = { viewModel.removeMediaAttachment(it) },
             onDismiss = { viewModel.dismissDialog() },
             onSave = { title, description -> viewModel.saveNote(title, description) }
         )
@@ -255,9 +293,18 @@ private fun EmptyNotesState(isSearching: Boolean) {
 @Composable
 private fun NoteCard(
     note: Note,
+    mediaVersion: Int,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val context = LocalContext.current
+    val mediaStore = remember { NoteMediaStore(context) }
+    var attachments by remember(note.id, mediaVersion) { mutableStateOf<List<MediaAttachment>>(emptyList()) }
+
+    LaunchedEffect(note.id, mediaVersion) {
+        attachments = mediaStore.getAttachments(note.id)
+    }
+
     Card(
         onClick = onEdit,
         shape = RoundedCornerShape(18.dp),
@@ -269,19 +316,23 @@ private fun NoteCard(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.Top
         ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = note.title.trim().take(1).ifBlank { "N" }.uppercase(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    fontWeight = FontWeight.Bold
-                )
+            if (attachments.isNotEmpty()) {
+                NoteThumbnailBadge(attachment = attachments.first(), extraCount = attachments.size - 1)
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = note.title.trim().take(1).ifBlank { "N" }.uppercase(),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Spacer(Modifier.width(12.dp))
@@ -331,13 +382,66 @@ private fun NoteCard(
     }
 }
 
+/** Small thumbnail shown on a note card when the note has one or more attached photos. */
+@Composable
+private fun NoteThumbnailBadge(attachment: MediaAttachment, extraCount: Int) {
+    val context = LocalContext.current
+    var thumbnail by remember(attachment.uri) { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(attachment.uri) {
+        thumbnail = loadMediaThumbnail(context, attachment.uri)
+    }
+
+    Box(modifier = Modifier.size(44.dp)) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            val bmp = thumbnail
+            if (bmp != null) {
+                Image(
+                    bitmap = bmp.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp))
+                )
+            } else {
+                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+            }
+        }
+        if (extraCount > 0) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .clip(RoundedCornerShape(topStart = 6.dp, bottomEnd = 10.dp))
+                    .background(MaterialTheme.colorScheme.primary)
+                    .padding(horizontal = 4.dp, vertical = 1.dp)
+            ) {
+                Text(
+                    text = "+$extraCount",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NoteEditDialog(
     initialTitle: String,
     initialDescription: String,
+    attachments: List<MediaAttachment>,
+    draftId: String,
     isSaving: Boolean,
     titleError: String?,
     isEditing: Boolean,
+    onAddAttachment: (MediaAttachment) -> Unit,
+    onRemoveAttachment: (MediaAttachment) -> Unit,
     onDismiss: () -> Unit,
     onSave: (String, String) -> Unit
 ) {
@@ -354,7 +458,11 @@ private fun NoteEditDialog(
             )
         },
         text = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 480.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
@@ -375,6 +483,14 @@ private fun NoteEditDialog(
                         .fillMaxWidth()
                         .padding(top = 10.dp)
                 )
+
+                NotePhotosSection(
+                    attachments = attachments,
+                    draftId = draftId,
+                    enabled = !isSaving,
+                    onAdd = onAddAttachment,
+                    onRemove = onRemoveAttachment
+                )
             }
         },
         confirmButton = {
@@ -392,4 +508,202 @@ private fun NoteEditDialog(
             }
         }
     )
+}
+
+/**
+ * Photo attach section for the note dialog: take a photo or pick from gallery, up to
+ * [maxPhotos]. Photos only — no video, per the Notes feature's requirements. Files are
+ * written to shared device storage via [MediaStorageManager] (same mechanism used for
+ * repair attachments), never uploaded anywhere.
+ */
+@Composable
+private fun NotePhotosSection(
+    attachments: List<MediaAttachment>,
+    draftId: String,
+    enabled: Boolean,
+    maxPhotos: Int = MAX_NOTE_PHOTOS,
+    onAdd: (MediaAttachment) -> Unit,
+    onRemove: (MediaAttachment) -> Unit
+) {
+    val context = LocalContext.current
+    val manager = remember { MediaStorageManager(context) }
+    val coroutineScope = rememberCoroutineScope()
+
+    val photoCount = attachments.size
+    val photosFull = photoCount >= maxPhotos
+
+    var pendingCapturePath by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingPermissionAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var showMenu by remember { mutableStateOf(false) }
+
+    fun toast(message: String) = Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+
+    val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val path = pendingCapturePath
+        val file = path?.let { File(it) }
+        if (success && file != null) {
+            val savedUri = manager.commitCapturedMedia(file, isVideo = false, draftId = draftId)
+            if (savedUri != null) {
+                onAdd(MediaAttachment(savedUri, MediaType.PHOTO))
+            } else {
+                toast("Could not save the photo. Please try again.")
+            }
+        } else if (file != null) {
+            manager.discardTempFile(file)
+        }
+        pendingCapturePath = null
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            pendingPermissionAction?.invoke()
+        } else {
+            toast("Camera permission is required to take photos.")
+        }
+        pendingPermissionAction = null
+    }
+
+    val pickImagesLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia()
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        val remaining = maxPhotos - photoCount
+        if (remaining <= 0) {
+            toast("You can attach up to $maxPhotos photos.")
+            return@rememberLauncherForActivityResult
+        }
+        val toImport = uris.take(remaining)
+        if (uris.size > remaining) toast("Only $remaining more photo(s) could be added (max $maxPhotos).")
+        coroutineScope.launch {
+            toImport.forEach { source ->
+                manager.importPickedMedia(source, isVideo = false, draftId = draftId)
+                    ?.let { onAdd(MediaAttachment(it, MediaType.PHOTO)) }
+            }
+        }
+    }
+
+    fun launchCameraForPhoto() {
+        val file = manager.createTempCaptureFile(isVideo = false, draftId = draftId)
+        val uri = runCatching { manager.uriForCaptureFile(file) }.getOrNull()
+        if (uri == null) { toast("Could not prepare the camera."); return }
+        pendingCapturePath = file.absolutePath
+        takePictureLauncher.launch(uri)
+    }
+
+    fun requestCameraThen(action: () -> Unit) {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+        if (granted) action() else {
+            pendingPermissionAction = action
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
+        Text(
+            text = "Photos $photoCount/$maxPhotos",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+
+        if (attachments.isNotEmpty()) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(attachments, key = { it.uri.toString() }) { item ->
+                    NotePhotoThumbnail(attachment = item, enabled = enabled, onRemove = { onRemove(item) })
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+
+        Box {
+            OutlinedButton(
+                onClick = { showMenu = true },
+                enabled = enabled && !photosFull,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.AddAPhoto, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (photosFull) "Photo limit reached" else "Add Photo")
+            }
+            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text("Take Photo") },
+                    leadingIcon = { Icon(Icons.Filled.AddAPhoto, contentDescription = null) },
+                    onClick = { showMenu = false; requestCameraThen { launchCameraForPhoto() } }
+                )
+                DropdownMenuItem(
+                    text = { Text("Choose from Gallery") },
+                    leadingIcon = { Icon(Icons.Filled.PhotoLibrary, contentDescription = null) },
+                    onClick = {
+                        showMenu = false
+                        pickImagesLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    }
+                )
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Stored privately on this device. Not uploaded — safe even if you uninstall or update the app.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun NotePhotoThumbnail(
+    attachment: MediaAttachment,
+    enabled: Boolean,
+    onRemove: () -> Unit
+) {
+    val context = LocalContext.current
+    var thumbnail by remember(attachment.uri) { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(attachment.uri) {
+        thumbnail = loadMediaThumbnail(context, attachment.uri)
+    }
+
+    Box(modifier = Modifier.size(64.dp)) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            val bmp = thumbnail
+            if (bmp != null) {
+                Image(
+                    bitmap = bmp.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp))
+                )
+            } else {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            }
+        }
+
+        IconButton(
+            onClick = onRemove,
+            enabled = enabled,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .size(20.dp)
+                .background(MaterialTheme.colorScheme.error, CircleShape)
+        ) {
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = "Remove",
+                tint = MaterialTheme.colorScheme.onError,
+                modifier = Modifier.size(12.dp)
+            )
+        }
+    }
 }

@@ -1,4 +1,3 @@
-// app/src/main/java/com/appriyo/repairmanager/navigation/NavGraph.kt (Updated)
 package com.appriyo.repairmanager.navigation
 
 import androidx.compose.runtime.Composable
@@ -16,6 +15,7 @@ import com.appriyo.repairmanager.presentation.screens.EmployeeScreen
 import com.appriyo.repairmanager.presentation.screens.LoginScreen
 import com.appriyo.repairmanager.presentation.screens.NotesScreen
 import com.appriyo.repairmanager.presentation.screens.SmsSettingsScreen
+import com.appriyo.repairmanager.presentation.screens.TaliKhataScreen
 
 @Composable
 fun NavGraph(
@@ -48,6 +48,10 @@ fun NavGraph(
 
         composable(Screen.Employee.route) {
             EmployeeScreen()
+        }
+
+        composable(Screen.TaliKhata.route) {
+            TaliKhataScreen()
         }
 
         // Detail screens (no bottom nav)

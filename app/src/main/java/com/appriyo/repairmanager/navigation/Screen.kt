@@ -1,4 +1,3 @@
-// app/src/main/java/com/appriyo/repairmanager/navigation/Screen.kt
 package com.appriyo.repairmanager.navigation
 
 sealed class Screen(val route: String) {
@@ -10,6 +9,7 @@ sealed class Screen(val route: String) {
     object CustomerList : Screen("customer_list")
     object Notes : Screen("notes")
     object Employee : Screen("employee")
+    object TaliKhata : Screen("talikhata")
 
     // Detail screens (not part of bottom nav)
     object CustomerDetails : Screen("customer_details/{repairId}") {

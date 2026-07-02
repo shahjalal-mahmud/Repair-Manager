@@ -1,9 +1,9 @@
-// app/src/main/java/com/appriyo/repairmanager/navigation/BottomNavItems.kt
 package com.appriyo.repairmanager.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Note
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -16,7 +16,7 @@ sealed class BottomNavItem(
     object AddCustomer : BottomNavItem(
         route = Screen.AddRepair.route,
         icon = Icons.Default.Add,
-        label = "Add Customer"
+        label = "Add"
     )
 
     object Customers : BottomNavItem(
@@ -35,5 +35,12 @@ sealed class BottomNavItem(
         route = Screen.Employee.route,
         icon = Icons.Default.Person,
         label = "Employee"
+    )
+
+    // New TaliKhata bottom nav item
+    object TaliKhata : BottomNavItem(
+        route = Screen.TaliKhata.route,
+        icon = Icons.Default.AccountBalanceWallet,
+        label = "TaliKhata"
     )
 }

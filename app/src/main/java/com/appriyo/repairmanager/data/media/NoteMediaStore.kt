@@ -1,8 +1,9 @@
 package com.appriyo.repairmanager.data.media
 
 import android.content.Context
-import android.net.Uri
+import androidx.core.net.toUri
 import org.json.JSONArray
+import androidx.core.content.edit
 
 /**
  * Persists which locally-stored photo attachments belong to which note.
@@ -26,7 +27,7 @@ class NoteMediaStore(context: Context) {
         return runCatching {
             val array = JSONArray(raw)
             (0 until array.length()).mapNotNull { i ->
-                runCatching { Uri.parse(array.getString(i)) }.getOrNull()
+                runCatching { array.getString(i).toUri() }.getOrNull()
             }.map { MediaAttachment(it, MediaType.PHOTO) }
         }.getOrDefault(emptyList())
     }
@@ -40,13 +41,13 @@ class NoteMediaStore(context: Context) {
         }
         val array = JSONArray()
         attachments.forEach { array.put(it.uri.toString()) }
-        prefs.edit().putString(key(noteId), array.toString()).apply()
+        prefs.edit { putString(key(noteId), array.toString()) }
     }
 
     /** Clears the stored attachment list for [noteId] (does not delete the underlying files). */
     fun removeNote(noteId: String) {
         if (noteId.isBlank()) return
-        prefs.edit().remove(key(noteId)).apply()
+        prefs.edit { remove(key(noteId)) }
     }
 
     private fun key(noteId: String) = "attachments_$noteId"

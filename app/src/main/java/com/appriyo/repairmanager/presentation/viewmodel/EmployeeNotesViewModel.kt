@@ -10,8 +10,8 @@ import com.appriyo.repairmanager.data.repository.EmployeeNotesRepository
 import com.appriyo.repairmanager.presentation.components.ToastMessage
 import com.appriyo.repairmanager.presentation.components.ToastType
 import com.appriyo.repairmanager.presentation.state.EmployeeNotesUiState
-import com.appriyo.repairmanager.presentation.state.LedgerDateFilter
 import com.appriyo.repairmanager.presentation.state.LedgerSummary
+import com.appriyo.repairmanager.presentation.state.LedgerViewMode
 import com.appriyo.repairmanager.presentation.state.WorkerStats
 import com.appriyo.repairmanager.presentation.utils.LedgerDateUtils
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,7 +26,9 @@ class EmployeeNotesViewModel(
     private val authRepository: AuthRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(EmployeeNotesUiState())
+    private val _uiState = MutableStateFlow(
+        EmployeeNotesUiState(selectedMonthStart = LedgerDateUtils.startOfMonth(Date()))
+    )
     val uiState = _uiState.asStateFlow()
 
     init {
@@ -49,50 +51,77 @@ class EmployeeNotesViewModel(
     }
 
     // ------------------------------------------------------------------
-    // Date filtering - all filtering/aggregation happens here, never in Compose.
+    // View mode switching - single-day (default = today) vs whole month.
     // ------------------------------------------------------------------
 
-    fun onFilterSelected(filter: LedgerDateFilter) {
-        when (filter) {
-            LedgerDateFilter.CUSTOM_DATE -> _uiState.update { it.copy(showDatePicker = true) }
-            LedgerDateFilter.CUSTOM_RANGE -> _uiState.update { it.copy(showRangePicker = true) }
-            else -> {
-                _uiState.update { it.copy(selectedFilter = filter) }
-                recomputeDerivedState()
-            }
-        }
-    }
-
-    fun onCustomDateSelected(date: Date) {
-        _uiState.update {
-            it.copy(
-                selectedFilter = LedgerDateFilter.CUSTOM_DATE,
-                customDate = date,
-                showDatePicker = false
-            )
-        }
+    fun switchToDayView() {
+        if (_uiState.value.viewMode == LedgerViewMode.SINGLE_DAY) return
+        _uiState.update { it.copy(viewMode = LedgerViewMode.SINGLE_DAY) }
         recomputeDerivedState()
     }
 
-    fun onCustomRangeSelected(start: Date, end: Date) {
-        val (rangeStart, rangeEnd) = if (start.after(end)) end to start else start to end
-        _uiState.update {
-            it.copy(
-                selectedFilter = LedgerDateFilter.CUSTOM_RANGE,
-                customRangeStart = rangeStart,
-                customRangeEnd = rangeEnd,
-                showRangePicker = false
-            )
-        }
+    fun switchToMonthView() {
+        if (_uiState.value.viewMode == LedgerViewMode.MONTH) return
+        _uiState.update { it.copy(viewMode = LedgerViewMode.MONTH) }
         recomputeDerivedState()
+    }
+
+    fun openDatePicker() {
+        _uiState.update { it.copy(showDatePicker = true) }
     }
 
     fun dismissDatePicker() {
         _uiState.update { it.copy(showDatePicker = false) }
     }
 
-    fun dismissRangePicker() {
-        _uiState.update { it.copy(showRangePicker = false) }
+    fun openMonthPicker() {
+        _uiState.update { it.copy(showMonthPicker = true) }
+    }
+
+    fun dismissMonthPicker() {
+        _uiState.update { it.copy(showMonthPicker = false) }
+    }
+
+    fun onDateSelected(date: Date) {
+        _uiState.update {
+            it.copy(
+                viewMode = LedgerViewMode.SINGLE_DAY,
+                selectedDate = date,
+                showDatePicker = false
+            )
+        }
+        recomputeDerivedState()
+    }
+
+    fun onMonthSelected(monthStart: Date) {
+        _uiState.update {
+            it.copy(
+                viewMode = LedgerViewMode.MONTH,
+                selectedMonthStart = LedgerDateUtils.startOfMonth(monthStart),
+                showMonthPicker = false
+            )
+        }
+        recomputeDerivedState()
+    }
+
+    // ------------------------------------------------------------------
+    // Search
+    // ------------------------------------------------------------------
+
+    fun toggleSearch() {
+        _uiState.update {
+            if (it.isSearchActive) {
+                it.copy(isSearchActive = false, searchQuery = "")
+            } else {
+                it.copy(isSearchActive = true)
+            }
+        }
+        recomputeDerivedState()
+    }
+
+    fun closeSearch() {
+        _uiState.update { it.copy(isSearchActive = false, searchQuery = "") }
+        recomputeDerivedState()
     }
 
     fun onSearchQueryChange(query: String) {
@@ -100,23 +129,18 @@ class EmployeeNotesViewModel(
         recomputeDerivedState()
     }
 
+    // ------------------------------------------------------------------
+    // Derived state - filtering + aggregation. All heavy work lives here.
+    // ------------------------------------------------------------------
+
     private fun recomputeDerivedState() {
         val state = _uiState.value
 
-        val periodNotes = when (state.selectedFilter) {
-            LedgerDateFilter.TODAY -> employeeNotesRepository.filterForToday(state.allNotes)
-            LedgerDateFilter.YESTERDAY -> employeeNotesRepository.filterForDate(
-                state.allNotes,
-                LedgerDateUtils.addDays(Date(), -1)
-            )
-            LedgerDateFilter.THIS_WEEK -> employeeNotesRepository.filterForWeek(state.allNotes)
-            LedgerDateFilter.THIS_MONTH -> employeeNotesRepository.filterForMonth(state.allNotes)
-            LedgerDateFilter.CUSTOM_DATE -> employeeNotesRepository.filterForDate(state.allNotes, state.customDate)
-            LedgerDateFilter.CUSTOM_RANGE -> employeeNotesRepository.filterForRange(
-                state.allNotes,
-                state.customRangeStart ?: state.customDate,
-                state.customRangeEnd ?: state.customDate
-            )
+        val periodNotes = when (state.viewMode) {
+            LedgerViewMode.SINGLE_DAY ->
+                employeeNotesRepository.filterForDate(state.allNotes, state.selectedDate)
+            LedgerViewMode.MONTH ->
+                employeeNotesRepository.filterForMonth(state.allNotes, state.selectedMonthStart)
         }
 
         // Search narrows what's displayed, but never affects the period's summary totals.

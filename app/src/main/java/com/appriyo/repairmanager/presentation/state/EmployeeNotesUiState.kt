@@ -14,6 +14,7 @@ data class EmployeeNotesUiState(
     val summary: LedgerSummary = LedgerSummary(),
 
     val searchQuery: String = "",
+    val isSearchActive: Boolean = false,
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val errorMessage: String? = null,
@@ -27,11 +28,17 @@ data class EmployeeNotesUiState(
 
     val toast: ToastMessage? = null,
 
-    // Date filtering - lives entirely here so Compose never filters anything itself.
-    val selectedFilter: LedgerDateFilter = LedgerDateFilter.TODAY,
-    val customDate: Date = Date(),
-    val customRangeStart: Date? = null,
-    val customRangeEnd: Date? = null,
+    /**
+     * View mode:
+     *  - SINGLE_DAY: show entries from [selectedDate] (defaults to today)
+     *  - MONTH: show entries aggregated across the whole month [selectedMonthStart]
+     */
+    val viewMode: LedgerViewMode = LedgerViewMode.SINGLE_DAY,
+    val selectedDate: Date = Date(),
+    val selectedMonthStart: Date = Date(),
+
     val showDatePicker: Boolean = false,
-    val showRangePicker: Boolean = false
+    val showMonthPicker: Boolean = false
 )
+
+enum class LedgerViewMode { SINGLE_DAY, MONTH }

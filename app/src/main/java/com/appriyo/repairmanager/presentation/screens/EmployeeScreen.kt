@@ -1,9 +1,8 @@
 // app/src/main/java/com/appriyo/repairmanager/presentation/screens/EmployeeScreen.kt
-@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.appriyo.repairmanager.presentation.screens
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,24 +18,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EventBusy
-import androidx.compose.material.icons.filled.Payments
-import androidx.compose.material.icons.filled.Receipt
-import androidx.compose.material.icons.filled.RequestQuote
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -44,10 +41,10 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,11 +53,9 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -72,24 +67,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.appriyo.repairmanager.data.model.EmployeeNote
 import com.appriyo.repairmanager.data.model.WorkerType
 import com.appriyo.repairmanager.presentation.components.DeleteConfirmationDialog
 import com.appriyo.repairmanager.presentation.components.TopToastHost
-import com.appriyo.repairmanager.presentation.state.LedgerDateFilter
 import com.appriyo.repairmanager.presentation.state.LedgerSummary
+import com.appriyo.repairmanager.presentation.state.LedgerViewMode
 import com.appriyo.repairmanager.presentation.state.WorkerStats
 import com.appriyo.repairmanager.presentation.utils.LedgerDateUtils
 import com.appriyo.repairmanager.presentation.viewmodel.EmployeeNotesViewModel
 import org.koin.androidx.compose.koinViewModel
+import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -111,82 +105,82 @@ fun EmployeeScreen(
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             floatingActionButton = {
-                ExtendedFloatingActionButton(
+                FloatingActionButton(
                     onClick = { viewModel.openAddDialog() },
-                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                    text = { Text("Add Entry") },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "Add Entry")
+                }
             }
         ) { paddingValues ->
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(bottom = 96.dp)
             ) {
-                item {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "Daily Work Ledger",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = LedgerDateUtils.formatFilterHeader(
-                            uiState.selectedFilter,
-                            uiState.customDate,
-                            uiState.customRangeStart,
-                            uiState.customRangeEnd
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(14.dp))
-                }
+                // ---- Top bar: title + month/day selector + search toggle ----
+                TopBar(
+                    viewMode = uiState.viewMode,
+                    selectedDate = uiState.selectedDate,
+                    selectedMonthStart = uiState.selectedMonthStart,
+                    isSearchActive = uiState.isSearchActive,
+                    onPickDate = { viewModel.openDatePicker() },
+                    onPickMonth = { viewModel.openMonthPicker() },
+                    onSwitchToDay = { viewModel.switchToDayView() },
+                    onSwitchToMonth = { viewModel.switchToMonthView() },
+                    onToggleSearch = { viewModel.toggleSearch() }
+                )
 
-                stickyHeader {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.background)
-                            .padding(bottom = 10.dp)
-                    ) {
-                        LedgerFilterRow(
-                            selectedFilter = uiState.selectedFilter,
-                            onFilterSelected = { viewModel.onFilterSelected(it) }
-                        )
-                    }
+                // ---- Search field (only when toggled on) ----
+                if (uiState.isSearchActive) {
+                    SearchField(
+                        value = uiState.searchQuery,
+                        onValueChange = { viewModel.onSearchQueryChange(it) },
+                        onClose = { viewModel.closeSearch() }
+                    )
                 }
 
                 if (uiState.isLoading) {
-                    item { LoadingState() }
+                    LoadingState()
                 } else {
-                    item {
-                        Spacer(Modifier.height(10.dp))
-                        SummaryDashboard(summary = uiState.summary)
-                        Spacer(Modifier.height(14.dp))
-                        WorkerBreakdownSection(summary = uiState.summary)
-                        Spacer(Modifier.height(16.dp))
-                        EmployeeSearchField(
-                            value = uiState.searchQuery,
-                            onValueChange = { viewModel.onSearchQueryChange(it) }
-                        )
-                        Spacer(Modifier.height(12.dp))
-                    }
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp),
+                        contentPadding = PaddingValues(top = 6.dp, bottom = 96.dp)
+                    ) {
+                        // ---- Compact dashboard (single row of 4 stats) ----
+                        item {
+                            CompactSummaryRow(summary = uiState.summary)
+                            Spacer(Modifier.height(6.dp))
+                        }
 
-                    if (uiState.filteredNotes.isEmpty()) {
-                        item { EmptyEmployeeState(isSearching = uiState.searchQuery.isNotBlank()) }
-                    } else {
-                        items(uiState.filteredNotes, key = { it.id }) { note ->
-                            WorkLedgerCard(
-                                note = note,
-                                onEdit = { viewModel.openEditDialog(note) },
-                                onDelete = { viewModel.requestDeleteNote(note) }
-                            )
-                            Spacer(Modifier.height(10.dp))
+                        // ---- Worker breakdown (single compact row) ----
+                        item {
+                            CompactWorkerBreakdown(summary = uiState.summary)
+                            Spacer(Modifier.height(8.dp))
+                            EntriesHeader(count = uiState.filteredNotes.size)
+                            Spacer(Modifier.height(6.dp))
+                        }
+
+                        // ---- Entries ----
+                        if (uiState.filteredNotes.isEmpty()) {
+                            item {
+                                EmptyEmployeeState(
+                                    isSearching = uiState.searchQuery.isNotBlank(),
+                                    isMonthView = uiState.viewMode == LedgerViewMode.MONTH
+                                )
+                            }
+                        } else {
+                            items(uiState.filteredNotes, key = { it.id }) { note ->
+                                CompactEntryRow(
+                                    note = note,
+                                    onEdit = { viewModel.openEditDialog(note) },
+                                    onDelete = { viewModel.requestDeleteNote(note) }
+                                )
+                                Spacer(Modifier.height(6.dp))
+                            }
                         }
                     }
                 }
@@ -231,189 +225,348 @@ fun EmployeeScreen(
 
     if (uiState.showDatePicker) {
         LedgerDatePickerDialog(
-            initialDate = uiState.customDate,
+            initialDate = uiState.selectedDate,
             onDismiss = { viewModel.dismissDatePicker() },
-            onConfirm = { viewModel.onCustomDateSelected(it) }
+            onConfirm = { viewModel.onDateSelected(it) }
         )
     }
 
-    if (uiState.showRangePicker) {
-        LedgerDateRangePickerDialog(
-            onDismiss = { viewModel.dismissRangePicker() },
-            onConfirm = { start, end -> viewModel.onCustomRangeSelected(start, end) }
+    if (uiState.showMonthPicker) {
+        LedgerMonthPickerDialog(
+            initialMonthStart = uiState.selectedMonthStart,
+            onDismiss = { viewModel.dismissMonthPicker() },
+            onConfirm = { viewModel.onMonthSelected(it) }
         )
     }
 }
 
 // ---------------------------------------------------------------------
-// Filter row
+// Top bar (single line: title · month selector · search icon)
 // ---------------------------------------------------------------------
 
 @Composable
-private fun LedgerFilterRow(
-    selectedFilter: LedgerDateFilter,
-    onFilterSelected: (LedgerDateFilter) -> Unit,
-    modifier: Modifier = Modifier
+private fun TopBar(
+    viewMode: LedgerViewMode,
+    selectedDate: Date,
+    selectedMonthStart: Date,
+    isSearchActive: Boolean,
+    onPickDate: () -> Unit,
+    onPickMonth: () -> Unit,
+    onSwitchToDay: () -> Unit,
+    onSwitchToMonth: () -> Unit,
+    onToggleSearch: () -> Unit
 ) {
-    LazyRow(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(vertical = 4.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        items(LedgerDateFilter.entries) { filter ->
-            val needsCalendarIcon = filter == LedgerDateFilter.CUSTOM_DATE || filter == LedgerDateFilter.CUSTOM_RANGE
-            FilterChip(
-                selected = filter == selectedFilter,
-                onClick = { onFilterSelected(filter) },
-                label = { Text(filter.label) },
-                leadingIcon = if (needsCalendarIcon) {
-                    {
-                        Icon(
-                            Icons.Filled.CalendarMonth,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                } else null,
-                shape = RoundedCornerShape(12.dp)
-            )
-        }
-    }
-}
-
-// ---------------------------------------------------------------------
-// Dashboard
-// ---------------------------------------------------------------------
-
-@Composable
-private fun SummaryDashboard(summary: LedgerSummary, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            StatCard(
-                label = "Total Entries",
-                value = summary.totalEntries.toString(),
-                icon = Icons.Filled.Receipt,
-                accentColor = Color(0xFF7C3AED),
-                modifier = Modifier.weight(1f)
-            )
-            StatCard(
-                label = "Total Payment",
-                value = formatCurrency(summary.totalPayment),
-                icon = Icons.Filled.Payments,
-                accentColor = Color(0xFF0EA5E9),
-                modifier = Modifier.weight(1f)
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            StatCard(
-                label = "Total Profit",
-                value = formatCurrency(summary.totalProfit),
-                icon = Icons.AutoMirrored.Filled.TrendingUp,
-                accentColor = Color(0xFF16A34A),
-                modifier = Modifier.weight(1f)
-            )
-            StatCard(
-                label = "Total Cost",
-                value = formatCurrency(summary.totalCost),
-                icon = Icons.Filled.RequestQuote,
-                accentColor = Color(0xFFDC2626),
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun StatCard(
-    label: String,
-    value: String,
-    icon: ImageVector,
-    accentColor: Color,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        modifier = modifier
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(accentColor.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
-            }
-            Spacer(Modifier.height(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = value,
+                text = "Ledger",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(Modifier.height(2.dp))
+            // Inline date/month pill that opens the respective picker
+            DateOrMonthPill(
+                viewMode = viewMode,
+                selectedDate = selectedDate,
+                selectedMonthStart = selectedMonthStart,
+                onPickDate = onPickDate,
+                onPickMonth = onPickMonth,
+                onSwitchToDay = onSwitchToDay,
+                onSwitchToMonth = onSwitchToMonth
+            )
+        }
+        IconButton(onClick = onToggleSearch) {
+            Icon(
+                imageVector = if (isSearchActive) Icons.Filled.Close else Icons.Filled.Search,
+                contentDescription = if (isSearchActive) "Close search" else "Open search",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun DateOrMonthPill(
+    viewMode: LedgerViewMode,
+    selectedDate: Date,
+    selectedMonthStart: Date,
+    onPickDate: () -> Unit,
+    onPickMonth: () -> Unit,
+    onSwitchToDay: () -> Unit,
+    onSwitchToMonth: () -> Unit
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val label = when (viewMode) {
+        LedgerViewMode.SINGLE_DAY -> formatShortDate(selectedDate)
+        LedgerViewMode.MONTH -> formatMonthYear(selectedMonthStart)
+    }
+    val icon = if (viewMode == LedgerViewMode.MONTH)
+        Icons.Filled.CalendarMonth else Icons.Filled.CalendarToday
+
+    Box {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable { menuOpen = true }
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(6.dp))
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.width(2.dp))
+            Icon(
+                imageVector = Icons.Filled.ArrowDropDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        DropdownMenu(
+            expanded = menuOpen,
+            onDismissRequest = { menuOpen = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Today") },
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.Today,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                onClick = {
+                    menuOpen = false
+                    onSwitchToDay()
+                    onPickDate()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Pick a day") },
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.CalendarToday,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                onClick = {
+                    menuOpen = false
+                    onSwitchToDay()
+                    onPickDate()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Whole month") },
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.CalendarMonth,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                onClick = {
+                    menuOpen = false
+                    onSwitchToMonth()
+                    onPickMonth()
+                }
             )
         }
     }
 }
 
 // ---------------------------------------------------------------------
-// Worker breakdown
+// Compact dashboard - one row of 4 stat chips
 // ---------------------------------------------------------------------
 
 @Composable
-private fun WorkerBreakdownSection(summary: LedgerSummary, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        Text(
-            text = "Worker Breakdown",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+private fun CompactSummaryRow(summary: LedgerSummary) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        MiniStat(
+            label = "Entries",
+            value = summary.totalEntries.toString(),
+            accent = Color(0xFF7C3AED),
+            modifier = Modifier.weight(1f)
         )
-        Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            WorkerStatsCard(stats = summary.workerAStats, modifier = Modifier.weight(1f))
-            WorkerStatsCard(stats = summary.workerBStats, modifier = Modifier.weight(1f))
-        }
+        MiniStat(
+            label = "Payment",
+            value = formatCurrency(summary.totalPayment),
+            accent = Color(0xFF0EA5E9),
+            modifier = Modifier.weight(1.4f)
+        )
+        MiniStat(
+            label = "Profit",
+            value = formatCurrency(summary.totalProfit),
+            accent = Color(0xFF16A34A),
+            modifier = Modifier.weight(1.4f)
+        )
+        MiniStat(
+            label = "Cost",
+            value = formatCurrency(summary.totalCost),
+            accent = Color(0xFFDC2626),
+            modifier = Modifier.weight(1.2f)
+        )
     }
 }
 
 @Composable
-private fun WorkerStatsCard(stats: WorkerStats, modifier: Modifier = Modifier) {
+private fun MiniStat(
+    label: String,
+    value: String,
+    accent: Color,
+    modifier: Modifier = Modifier
+) {
     Card(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.10f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = accent,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// Compact worker breakdown - single row, both workers side by side
+// ---------------------------------------------------------------------
+
+@Composable
+private fun CompactWorkerBreakdown(summary: LedgerSummary) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        CompactWorkerCard(stats = summary.workerAStats, modifier = Modifier.weight(1f))
+        CompactWorkerCard(stats = summary.workerBStats, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun CompactWorkerCard(stats: WorkerStats, modifier: Modifier = Modifier) {
+    val color = workerColor(stats.workerType)
+    Card(
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = modifier
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            WorkerBadge(stats.workerType)
-            Spacer(Modifier.height(10.dp))
-            WorkerStatRow("Entries", stats.entryCount.toString())
-            WorkerStatRow("Payment", formatCurrency(stats.totalPayment))
-            WorkerStatRow("Profit", formatCurrency(stats.totalProfit))
-            WorkerStatRow("Cost", formatCurrency(stats.totalCost))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(color),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = stats.workerType.storageValue,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "${stats.entryCount} ${if (stats.entryCount == 1) "job" else "jobs"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "P ${formatAmount(stats.totalPayment)} · Pr ${formatAmount(stats.totalProfit)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun WorkerStatRow(label: String, value: String) {
+private fun EntriesHeader(count: Int) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+        Text(
+            text = "Entries",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.width(6.dp))
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 6.dp, vertical = 1.dp)
+        ) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -422,27 +575,43 @@ private fun WorkerStatRow(label: String, value: String) {
 // ---------------------------------------------------------------------
 
 @Composable
-private fun EmployeeSearchField(value: String, onValueChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        placeholder = { Text("Search this period's entries") },
-        singleLine = true,
-        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-        trailingIcon = {
-            if (value.isNotEmpty()) {
-                IconButton(onClick = { onValueChange("") }) {
-                    Icon(Icons.Filled.Close, contentDescription = "Clear search")
+private fun SearchField(value: String, onValueChange: (String) -> Unit, onClose: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text("Search entries") },
+            singleLine = true,
+            leadingIcon = {
+                Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+            },
+            trailingIcon = {
+                if (value.isNotEmpty()) {
+                    IconButton(
+                        onClick = { onValueChange("") },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(Icons.Filled.Close, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                    }
                 }
-            }
-        },
-        shape = RoundedCornerShape(16.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-            focusedBorderColor = MaterialTheme.colorScheme.primary
-        ),
-        modifier = Modifier.fillMaxWidth()
-    )
+            },
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                focusedBorderColor = MaterialTheme.colorScheme.primary
+            ),
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.width(6.dp))
+        TextButton(onClick = onClose) {
+            Text("Cancel")
+        }
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -453,8 +622,8 @@ private fun EmployeeSearchField(value: String, onValueChange: (String) -> Unit) 
 private fun LoadingState() {
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 64.dp),
+            .fillMaxSize()
+            .padding(vertical = 48.dp),
         contentAlignment = Alignment.Center
     ) {
         CircularProgressIndicator(strokeWidth = 3.dp)
@@ -462,16 +631,16 @@ private fun LoadingState() {
 }
 
 @Composable
-private fun EmptyEmployeeState(isSearching: Boolean) {
+private fun EmptyEmployeeState(isSearching: Boolean, isMonthView: Boolean) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 48.dp),
+            .padding(vertical = 36.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
-                .size(96.dp)
+                .size(72.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)),
             contentAlignment = Alignment.Center
@@ -480,20 +649,25 @@ private fun EmptyEmployeeState(isSearching: Boolean) {
                 imageVector = if (isSearching) Icons.Filled.SearchOff else Icons.Filled.EventBusy,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(34.dp)
             )
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         Text(
-            text = if (isSearching) "No matching entries" else "No work recorded for this date.",
-            style = MaterialTheme.typography.titleMedium,
+            text = when {
+                isSearching -> "No matching entries"
+                isMonthView -> "No entries recorded for this month."
+                else -> "No entries recorded for today."
+            },
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(2.dp))
         Text(
-            text = if (isSearching) "Try a different search term" else "Tap + to log today's first repair job",
-            style = MaterialTheme.typography.bodyMedium,
+            text = if (isSearching) "Try a different search term"
+            else "Tap + to log the first repair job",
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
@@ -501,11 +675,11 @@ private fun EmptyEmployeeState(isSearching: Boolean) {
 }
 
 // ---------------------------------------------------------------------
-// Entry card
+// Compact entry row - all details, but tiny and never overflows
 // ---------------------------------------------------------------------
 
 @Composable
-private fun WorkLedgerCard(
+private fun CompactEntryRow(
     note: EmployeeNote,
     onEdit: () -> Unit,
     onDelete: () -> Unit
@@ -515,96 +689,138 @@ private fun WorkLedgerCard(
 
     Card(
         onClick = onEdit,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            // Top row: worker badge · title (fills) · edit · delete
             Row(verticalAlignment = Alignment.CenterVertically) {
-                WorkerBadge(worker)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(workerColor(worker))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = worker.storageValue,
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = note.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
                     Icon(
                         Icons.Filled.Edit,
                         contentDescription = "Edit entry",
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
-                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
                     Icon(
                         Icons.Filled.Delete,
                         contentDescription = "Delete entry",
                         tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
 
-            Spacer(Modifier.height(4.dp))
-
-            Text(
-                text = LedgerDateUtils.formatEntryTimestamp(note.createdAt),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
+            // Description (single line)
             if (note.description.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
                 Text(
                     text = note.description,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp)
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(6.dp))
 
+            // Bottom row: 3 micro-stats inline
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                MiniAmountBlock("Payment", note.totalPayment, Color(0xFF0EA5E9), Modifier.weight(1f))
-                MiniAmountBlock("Profit", note.profit, Color(0xFF16A34A), Modifier.weight(1f))
-                MiniAmountBlock("Cost", cost, Color(0xFFDC2626), Modifier.weight(1f))
+                InlineStat(
+                    label = "Pay",
+                    value = formatAmount(note.totalPayment),
+                    accent = Color(0xFF0EA5E9),
+                    modifier = Modifier.weight(1f)
+                )
+                InlineStat(
+                    label = "Profit",
+                    value = formatAmount(note.profit),
+                    accent = Color(0xFF16A34A),
+                    modifier = Modifier.weight(1f)
+                )
+                InlineStat(
+                    label = "Cost",
+                    value = formatAmount(cost),
+                    accent = Color(0xFFDC2626),
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = LedgerDateUtils.formatEntryTimestamp(note.createdAt),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .padding(start = 4.dp)
+                )
             }
         }
     }
 }
 
 @Composable
-private fun MiniAmountBlock(label: String, amount: Double, accentColor: Color, modifier: Modifier = Modifier) {
-    Column(
+private fun InlineStat(
+    label: String,
+    value: String,
+    accent: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(accentColor.copy(alpha = 0.12f))
-            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(accent.copy(alpha = 0.12f))
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = accentColor)
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = formatCurrency(amount),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Column {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = accent
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
 // ---------------------------------------------------------------------
-// Worker selector + badge
+// Worker selector + badge helpers
 // ---------------------------------------------------------------------
 
 @Composable
@@ -642,23 +858,6 @@ private fun WorkerSelector(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun WorkerBadge(worker: WorkerType) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(workerColor(worker))
-            .padding(horizontal = 10.dp, vertical = 4.dp)
-    ) {
-        Text(
-            text = worker.storageValue,
-            color = Color.White,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold
-        )
     }
 }
 
@@ -778,7 +977,7 @@ private fun WorkLedgerEntryDialog(
 }
 
 // ---------------------------------------------------------------------
-// Date / date-range pickers
+// Date / month pickers
 // ---------------------------------------------------------------------
 
 @Composable
@@ -808,50 +1007,115 @@ private fun LedgerDatePickerDialog(
     }
 }
 
+/**
+ * Lightweight month picker. Shows the last 24 months (e.g. Jul 2024 .. Jul 2026)
+ * as a scrollable list. Picking a row selects the entire month at midnight.
+ */
 @Composable
-private fun LedgerDateRangePickerDialog(
+private fun LedgerMonthPickerDialog(
+    initialMonthStart: Date,
     onDismiss: () -> Unit,
-    onConfirm: (Date, Date) -> Unit
+    onConfirm: (Date) -> Unit
 ) {
-    val state = rememberDateRangePickerState()
-    Dialog(
+    val now = Date()
+    val months = remember {
+        val list = mutableListOf<Date>()
+        val cal = Calendar.getInstance()
+        cal.time = LedgerDateUtils.startOfMonth(now)
+        repeat(24) {
+            list.add(cal.time)
+            cal.add(Calendar.MONTH, -1)
+        }
+        list
+    }
+
+    var selectedIndex by remember {
+        val idx = months.indexOfFirst {
+            LedgerDateUtils.startOfMonth(it) == LedgerDateUtils.startOfMonth(initialMonthStart)
+        }
+        mutableStateOf(if (idx >= 0) idx else 0)
+    }
+
+    AlertDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                DateRangePicker(
-                    state = state,
-                    modifier = Modifier.weight(1f)
-                )
-                Row(
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Text(text = "Select month", fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                androidx.compose.foundation.lazy.LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.End
+                        .height(280.dp)
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
-                    Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = {
-                        val start = state.selectedStartDateMillis
-                        val end = state.selectedEndDateMillis
-                        if (start != null && end != null) {
-                            onConfirm(
-                                LedgerDateUtils.utcMillisToLocalDate(start),
-                                LedgerDateUtils.utcMillisToLocalDate(end)
+                    items(months.size) { index ->
+                        val monthDate = months[index]
+                        val isSelected = index == selectedIndex
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                    else Color.Transparent
+                                )
+                                .clickable { selectedIndex = index }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioDot(selected = isSelected)
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = formatMonthYear(monthDate),
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface
                             )
-                        } else {
-                            onDismiss()
                         }
-                    }) { Text("OK") }
+                    }
                 }
             }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(months[selectedIndex]) },
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("OK") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun RadioDot(selected: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(18.dp)
+            .clip(CircleShape)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary
+                else Color.Transparent
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (!selected) {
+            Box(
+                modifier = Modifier
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
+            )
         }
     }
 }
@@ -869,3 +1133,15 @@ private fun formatAmount(value: Double): String {
         String.format(Locale.US, "%.2f", value)
     }
 }
+
+private fun formatShortDate(date: Date): String {
+    val today = Date()
+    return if (LedgerDateUtils.isSameDay(date, today)) {
+        "Today"
+    } else {
+        SimpleDateFormat("d MMM", Locale.getDefault()).format(date)
+    }
+}
+
+private fun formatMonthYear(date: Date): String =
+    SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(date)

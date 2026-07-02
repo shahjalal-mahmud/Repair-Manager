@@ -5,6 +5,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -13,6 +14,13 @@ sealed class BottomNavItem(
     val icon: ImageVector,
     val label: String
 ) {
+    // Default landing tab - the dashboard.
+    object Home : BottomNavItem(
+        route = Screen.Dashboard.route,
+        icon = Icons.Default.Home,
+        label = "Home"
+    )
+
     object AddCustomer : BottomNavItem(
         route = Screen.AddRepair.route,
         icon = Icons.Default.Add,
@@ -37,7 +45,7 @@ sealed class BottomNavItem(
         label = "Employee"
     )
 
-    // New TaliKhata bottom nav item
+    // No longer shown in the bottom nav - accessible from the dashboard instead.
     object TaliKhata : BottomNavItem(
         route = Screen.TaliKhata.route,
         icon = Icons.Default.AccountBalanceWallet,

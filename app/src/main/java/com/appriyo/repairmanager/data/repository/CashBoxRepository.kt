@@ -13,17 +13,14 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
-import kotlin.Result
-import kotlin.runCatching
 
 class CashBoxRepository(
 private val firestore: FirebaseFirestore,
 private val userProvider: FirestoreUserProvider
 ) {
 
-private fun boxDocument(type: CashBoxType) = firestore
-.collection(USERS_COLLECTION)
-.document(userProvider.getUid())
+private fun boxDocument(type: CashBoxType) = userProvider
+.currentUserDocument()
 .collection(CASH_BOXES_COLLECTION)
 .document(type.firestoreId)
 
@@ -217,7 +214,6 @@ null
 }
 
 private companion object {
-const val USERS_COLLECTION = "users"
 const val CASH_BOXES_COLLECTION = "cashBoxes"
 const val TRANSACTIONS_SUBCOLLECTION = "transactions"
 

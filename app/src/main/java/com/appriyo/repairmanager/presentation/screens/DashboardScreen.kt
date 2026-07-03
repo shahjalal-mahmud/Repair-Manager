@@ -50,6 +50,12 @@ import com.appriyo.repairmanager.navigation.Screen
 import com.appriyo.repairmanager.presentation.components.DeliveryCard
 import com.appriyo.repairmanager.presentation.viewmodel.DashboardViewModel
 import org.koin.androidx.compose.koinViewModel
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 
 private data class DashboardFeature(
     val title: String,
@@ -100,16 +106,39 @@ fun DashboardScreen(navController: NavHostController) {
     ) {
         item {
             Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Welcome back",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "Dashboard",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Welcome back",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Dashboard",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        navController.navigate(Screen.DeliveryList.passFilter(DeliveryFilter.TODAY.key))
+                    }
+                ) {
+                    BadgedBox(
+                        badge = {
+                            if (summary.todayCount > 0) {
+                                Badge { Text(summary.todayCount.toString()) }
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Filled.Notifications, contentDescription = "Today's deliveries")
+                    }
+                }
+            }
             Spacer(Modifier.height(20.dp))
         }
 

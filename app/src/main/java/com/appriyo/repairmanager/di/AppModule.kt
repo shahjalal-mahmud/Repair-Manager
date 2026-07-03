@@ -6,6 +6,7 @@ import com.appriyo.repairmanager.data.media.MediaStorageManager
 import com.appriyo.repairmanager.data.media.NoteMediaStore
 import com.appriyo.repairmanager.data.repository.AppSettingsRepository
 import com.appriyo.repairmanager.data.repository.AuthRepository
+import com.appriyo.repairmanager.data.repository.CashBoxRepository
 import com.appriyo.repairmanager.data.repository.EmployeeNotesRepository
 import com.appriyo.repairmanager.data.repository.FirestoreUserProvider
 import com.appriyo.repairmanager.data.repository.NotesRepository
@@ -15,8 +16,10 @@ import com.appriyo.repairmanager.data.repository.TaliKhataRepository
 import com.appriyo.repairmanager.data.sms.DeviceIdProvider
 import com.appriyo.repairmanager.data.sms.SmsAutoSendManager
 import com.appriyo.repairmanager.data.sms.SmsSender
+import com.appriyo.repairmanager.domain.cashbox.CashBoxType
 import com.appriyo.repairmanager.presentation.viewmodel.AddRepairViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.AuthViewModel
+import com.appriyo.repairmanager.presentation.viewmodel.CashBoxViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.CustomerDetailsViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.CustomerListViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.DashboardViewModel
@@ -51,6 +54,7 @@ val appModule = module {
     single { AppSettingsRepository(get(), get()) }
     single { SmsLogRepository(get(), get()) }
     single { TaliKhataRepository(get(), get()) }
+    single { CashBoxRepository(get(), get()) }
 
     // Local-only media (never synced to Firestore)
     single { MediaStorageManager(androidContext()) }
@@ -76,4 +80,5 @@ val appModule = module {
     viewModel { TaliKhataViewModel(get(), get()) }
     viewModel { DashboardViewModel(get()) }
     viewModel { (filterKey: String) -> DeliveryListViewModel(get(), filterKey) }
+    viewModel { (accountType: CashBoxType) -> CashBoxViewModel(get(), accountType) }
 }

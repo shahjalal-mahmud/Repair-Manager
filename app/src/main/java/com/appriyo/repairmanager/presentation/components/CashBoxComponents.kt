@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
@@ -47,11 +48,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.text.KeyboardOptions
 import com.appriyo.repairmanager.domain.cashbox.CashBoxSummary
 import com.appriyo.repairmanager.domain.cashbox.CashBoxType
 import com.appriyo.repairmanager.domain.cashbox.CashTransaction
@@ -61,7 +62,6 @@ import com.appriyo.repairmanager.presentation.viewmodel.CashBoxViewModel
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 import java.text.SimpleDateFormat
-import java.util.Locale
 
 /** Large balance card shown at the top of CashBoxScreen. */
 @Composable
@@ -194,7 +194,7 @@ fun CashTransactionCard(
                 }
                 transaction.createdAt?.let { date ->
                     Text(
-                        text = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(date),
+                        text = SimpleDateFormat("dd MMM yyyy, hh:mm a", LocalLocale.current.platformLocale).format(date),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
@@ -278,9 +278,9 @@ fun AddTransactionDialog(
     var amountText by rememberSaveable(existingTransaction?.id) {
         val initial = existingTransaction?.amount
         mutableStateOf(
-            when {
-                initial == null -> ""
-                initial == initial.toLong().toDouble() -> initial.toLong().toString()
+            when (initial) {
+                null -> ""
+                initial.toLong().toDouble() -> initial.toLong().toString()
                 else -> initial.toString()
             }
         )

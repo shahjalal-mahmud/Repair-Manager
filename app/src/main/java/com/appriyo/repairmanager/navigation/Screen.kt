@@ -22,4 +22,8 @@ sealed class Screen(val route: String) {
 
     // SMS settings (new)
     object SmsSettings : Screen("sms_settings")
+
+    object DeliveryList : Screen("delivery_list/{filterType}") {
+        fun passFilter(filterKey: String) = "delivery_list/$filterKey"
+    }
 }

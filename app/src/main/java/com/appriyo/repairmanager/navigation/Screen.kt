@@ -1,5 +1,7 @@
 package com.appriyo.repairmanager.navigation
 
+import com.appriyo.repairmanager.domain.cashbox.CashBoxType
+
 sealed class Screen(val route: String) {
     // Auth screens
     object Login : Screen("login")
@@ -25,5 +27,10 @@ sealed class Screen(val route: String) {
 
     object DeliveryList : Screen("delivery_list/{filterType}") {
         fun passFilter(filterKey: String) = "delivery_list/$filterKey"
+    }
+
+    // Cash Box Management (new) - one screen, reused for both Product/Market boxes
+    object CashBox : Screen("cash_box/{accountType}") {
+        fun passType(type: CashBoxType) = "cash_box/${type.firestoreId}"
     }
 }

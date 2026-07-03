@@ -7,6 +7,10 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import com.appriyo.repairmanager.notifications.NotificationNavigator
 import com.appriyo.repairmanager.presentation.screens.AddRepairScreen
 import com.appriyo.repairmanager.presentation.screens.CustomerDetailsScreen
 import com.appriyo.repairmanager.presentation.screens.CustomerListScreen
@@ -25,6 +29,14 @@ fun NavGraph(
     startDestination: String,
     modifier: Modifier = Modifier
 ) {
+    val pendingRoute by NotificationNavigator.pendingRoute.collectAsState()
+    LaunchedEffect(pendingRoute) {
+        pendingRoute?.let { route ->
+            navController.navigate(route)
+            NotificationNavigator.consume()
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,

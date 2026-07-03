@@ -304,32 +304,6 @@ class RepairRepository(
     )
 
     /**
-     * Updates the media counts for a repair record.
-     *
-     * @param repairId The ID of the repair to update
-     * @param photoCount New photo count
-     * @param videoCount New video count
-     * @return Result indicating success or failure
-     */
-    suspend fun updateMediaCounts(
-        repairId: String,
-        photoCount: Int,
-        videoCount: Int
-    ): Result<Unit> = runCatching {
-        repairsCollection.document(repairId).update(
-            mapOf(
-                "photoCount" to photoCount,
-                "videoCount" to videoCount,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
-        ).await()
-        Result.success(Unit)
-    }.fold(
-        onSuccess = { it },
-        onFailure = { handleException(it) }
-    )
-
-    /**
      * Deletes a repair record from Firestore.
      *
      * **Warning:** This operation is irreversible. Consider archiving instead.
@@ -358,6 +332,18 @@ class RepairRepository(
     suspend fun getRepair(repairId: String): Result<Repair?> = runCatching {
         val snapshot = repairsCollection.document(repairId).get().await()
         snapshot.toObject(Repair::class.java)
+    }.fold(
+        onSuccess = { Result.success(it) },
+        onFailure = { handleException(it) }
+    )
+
+    /**
+     * One-time fetch of all repairs. Used by the daily reminder BroadcastReceiver,
+     * which needs a snapshot rather than a long-lived listener.
+     */
+    suspend fun getAllRepairsOnce(): Result<List<Repair>> = runCatching {
+        val snapshot = repairsCollection.get().await()
+        snapshot.documents.mapNotNull { it.toObject(Repair::class.java) }
     }.fold(
         onSuccess = { Result.success(it) },
         onFailure = { handleException(it) }

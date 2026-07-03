@@ -385,7 +385,10 @@ fun CashBoxDashboardCard(
     accountType: CashBoxType,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: CashBoxViewModel = koinViewModel(parameters = { parametersOf(accountType) })
+    viewModel: CashBoxViewModel = koinViewModel(
+        key = "cashbox_${accountType.firestoreId}",
+        parameters = { parametersOf(accountType) }
+    )
 ) {
     val uiState by viewModel.uiState.collectAsState()
 

@@ -10,8 +10,10 @@ import androidx.navigation.navArgument
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import com.appriyo.repairmanager.domain.cashbox.CashBoxType
 import com.appriyo.repairmanager.notifications.NotificationNavigator
 import com.appriyo.repairmanager.presentation.screens.AddRepairScreen
+import com.appriyo.repairmanager.presentation.screens.CashBoxScreen
 import com.appriyo.repairmanager.presentation.screens.CustomerDetailsScreen
 import com.appriyo.repairmanager.presentation.screens.CustomerListScreen
 import com.appriyo.repairmanager.presentation.screens.DashboardScreen
@@ -100,6 +102,15 @@ fun NavGraph(
         ) { backStackEntry ->
             val filterType = backStackEntry.arguments?.getString("filterType") ?: "all"
             DeliveryListScreen(navController, filterType)
+        }
+
+        // Cash Box Management (new) - single screen, driven by accountType argument
+        composable(
+            route = Screen.CashBox.route,
+            arguments = listOf(navArgument("accountType") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val typeKey = backStackEntry.arguments?.getString("accountType") ?: CashBoxType.PRODUCT.firestoreId
+            CashBoxScreen(navController, CashBoxType.fromFirestoreId(typeKey))
         }
     }
 }

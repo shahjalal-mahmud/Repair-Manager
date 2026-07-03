@@ -56,7 +56,10 @@ import org.koin.core.parameter.parametersOf
 fun CashBoxScreen(
     navController: NavHostController,
     accountType: CashBoxType,
-    viewModel: CashBoxViewModel = koinViewModel(parameters = { parametersOf(accountType) })
+    viewModel: CashBoxViewModel = koinViewModel(
+        key = "cashbox_${accountType.firestoreId}",
+        parameters = { parametersOf(accountType) }
+    )
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }

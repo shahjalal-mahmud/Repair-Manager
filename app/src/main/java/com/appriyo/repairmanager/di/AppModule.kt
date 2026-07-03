@@ -19,6 +19,8 @@ import com.appriyo.repairmanager.presentation.viewmodel.AddRepairViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.AuthViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.CustomerDetailsViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.CustomerListViewModel
+import com.appriyo.repairmanager.presentation.viewmodel.DashboardViewModel
+import com.appriyo.repairmanager.presentation.viewmodel.DeliveryListViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.EditRepairViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.EmployeeNotesViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.MainViewModel
@@ -72,4 +74,6 @@ val appModule = module {
     viewModel { EmployeeNotesViewModel(get(), get()) }
     viewModel { SmsSettingsViewModel(get(), get(), get()) }
     viewModel { TaliKhataViewModel(get(), get()) }
+    viewModel { DashboardViewModel(get()) }
+    viewModel { (filterKey: String) -> DeliveryListViewModel(get(), filterKey) }
 }

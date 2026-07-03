@@ -363,6 +363,18 @@ class RepairRepository(
         onFailure = { handleException(it) }
     )
 
+    /**
+     * One-time fetch of all repairs. Used by the daily reminder BroadcastReceiver,
+     * which needs a snapshot rather than a long-lived listener.
+     */
+    suspend fun getAllRepairsOnce(): Result<List<Repair>> = runCatching {
+        val snapshot = repairsCollection.get().await()
+        snapshot.documents.mapNotNull { it.toObject(Repair::class.java) }
+    }.fold(
+        onSuccess = { Result.success(it) },
+        onFailure = { handleException(it) }
+    )
+
     // ======================== REALTIME STREAMS ========================
 
     /**

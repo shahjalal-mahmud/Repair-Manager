@@ -4,9 +4,7 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
-import android.provider.Settings
 import java.util.Calendar
 
 object AlarmScheduler {
@@ -29,16 +27,6 @@ object AlarmScheduler {
             return alarmManager.canScheduleExactAlarms()
         }
         return true
-    }
-
-    /** Opens the system screen where the user grants "Alarms & reminders". */
-    fun requestExactAlarmPermission(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                data = Uri.parse("package:${context.packageName}")
-            }
-            context.startActivity(intent)
-        }
     }
 
     fun scheduleDailyReminder(context: Context) {

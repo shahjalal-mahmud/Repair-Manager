@@ -11,6 +11,7 @@ import com.appriyo.repairmanager.presentation.screens.AddRepairScreen
 import com.appriyo.repairmanager.presentation.screens.CustomerDetailsScreen
 import com.appriyo.repairmanager.presentation.screens.CustomerListScreen
 import com.appriyo.repairmanager.presentation.screens.DashboardScreen
+import com.appriyo.repairmanager.presentation.screens.DeliveryListScreen
 import com.appriyo.repairmanager.presentation.screens.EditRepairScreen
 import com.appriyo.repairmanager.presentation.screens.EmployeeScreen
 import com.appriyo.repairmanager.presentation.screens.LoginScreen
@@ -79,6 +80,14 @@ fun NavGraph(
         // SMS settings (new)
         composable(Screen.SmsSettings.route) {
             SmsSettingsScreen()
+        }
+
+        composable(
+            route = Screen.DeliveryList.route,
+            arguments = listOf(navArgument("filterType") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val filterType = backStackEntry.arguments?.getString("filterType") ?: "all"
+            DeliveryListScreen(navController, filterType)
         }
     }
 }

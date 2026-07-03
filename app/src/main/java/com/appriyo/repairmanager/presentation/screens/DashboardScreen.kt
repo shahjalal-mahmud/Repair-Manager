@@ -24,13 +24,20 @@ import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.automirrored.filled.TrendingFlat
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,7 +45,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.appriyo.repairmanager.domain.delivery.DeliveryFilter
 import com.appriyo.repairmanager.navigation.Screen
+import com.appriyo.repairmanager.presentation.components.DeliveryCard
+import com.appriyo.repairmanager.presentation.viewmodel.DashboardViewModel
+import org.koin.androidx.compose.koinViewModel
 
 private data class DashboardFeature(
     val title: String,
@@ -50,6 +61,8 @@ private data class DashboardFeature(
 
 @Composable
 fun DashboardScreen(navController: NavHostController) {
+    val dashboardViewModel: DashboardViewModel = koinViewModel()
+    val summary by dashboardViewModel.summary.collectAsState()
     val features = listOf(
         DashboardFeature(
             title = "Add Repair",
@@ -134,6 +147,59 @@ fun DashboardScreen(navController: NavHostController) {
                 }
             }
             Spacer(Modifier.height(12.dp))
+        }
+
+        item {
+            Spacer(Modifier.height(80.dp))
+        }
+        // 5-card grid/row — wire each onClick to the matching filter:
+        item {
+            Text(
+                text = "Deliveries",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+
+        item {
+            DeliveryCard(
+                title = "Today", count = summary.todayCount,
+                icon = Icons.Filled.Today, accentColor = MaterialTheme.colorScheme.primary,
+                onClick = { navController.navigate(Screen.DeliveryList.passFilter(DeliveryFilter.TODAY.key)) }
+            )
+        }
+        item {
+            Spacer(Modifier.height(12.dp))
+            DeliveryCard(
+                title = "Tomorrow", count = summary.tomorrowCount,
+                icon = Icons.Filled.Event, accentColor = MaterialTheme.colorScheme.tertiary,
+                onClick = { navController.navigate(Screen.DeliveryList.passFilter(DeliveryFilter.TOMORROW.key)) }
+            )
+        }
+        item {
+            Spacer(Modifier.height(12.dp))
+            DeliveryCard(
+                title = "Overdue", count = summary.overdueCount,
+                icon = Icons.Filled.Warning, accentColor = MaterialTheme.colorScheme.error,
+                onClick = { navController.navigate(Screen.DeliveryList.passFilter(DeliveryFilter.OVERDUE.key)) }
+            )
+        }
+        item {
+            Spacer(Modifier.height(12.dp))
+            DeliveryCard(
+                title = "Delivered", count = summary.deliveredCount,
+                icon = Icons.Filled.CheckCircle, accentColor = Color(0xFF2E7D32),
+                onClick = { navController.navigate(Screen.DeliveryList.passFilter(DeliveryFilter.DELIVERED.key)) }
+            )
+        }
+        item {
+            Spacer(Modifier.height(12.dp))
+            DeliveryCard(
+                title = "All Deliveries", count = summary.allCount,
+                icon = Icons.Filled.LocalShipping, accentColor = MaterialTheme.colorScheme.secondary,
+                onClick = { navController.navigate(Screen.DeliveryList.passFilter(DeliveryFilter.ALL.key)) }
+            )
         }
 
         item {

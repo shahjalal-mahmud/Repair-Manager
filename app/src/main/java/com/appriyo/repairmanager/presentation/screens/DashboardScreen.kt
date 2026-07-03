@@ -49,8 +49,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.appriyo.repairmanager.domain.cashbox.CashBoxType
 import com.appriyo.repairmanager.domain.delivery.DeliveryFilter
 import com.appriyo.repairmanager.navigation.Screen
+import com.appriyo.repairmanager.presentation.components.CashBoxDashboardCard
 import com.appriyo.repairmanager.presentation.components.DeliveryCard
 import com.appriyo.repairmanager.presentation.viewmodel.DashboardViewModel
 import org.koin.androidx.compose.koinViewModel
@@ -174,6 +176,30 @@ fun DashboardScreen(navController: NavHostController) {
                 }
             }
             Spacer(Modifier.height(12.dp))
+        }
+
+        // Cash Box Management (new) - Product Box & Market Box balance cards.
+        item {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Cash Boxes",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+        item {
+            CashBoxDashboardCard(
+                accountType = CashBoxType.PRODUCT,
+                onClick = { navController.navigate(Screen.CashBox.passType(CashBoxType.PRODUCT)) }
+            )
+        }
+        item {
+            Spacer(Modifier.height(12.dp))
+            CashBoxDashboardCard(
+                accountType = CashBoxType.MARKET,
+                onClick = { navController.navigate(Screen.CashBox.passType(CashBoxType.MARKET)) }
+            )
         }
 
         item {

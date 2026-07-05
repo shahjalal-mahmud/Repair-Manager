@@ -19,9 +19,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -306,12 +308,32 @@ fun AddTransactionDialog(
             ) {
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     TransactionType.entries.forEachIndexed { index, type ->
+                        val isIncome = type == TransactionType.INCOME
+                        val typeColor = if (isIncome) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
                         SegmentedButton(
                             selected = transactionType == type,
                             onClick = { transactionType = type },
-                            shape = SegmentedButtonDefaults.itemShape(index = index, count = TransactionType.entries.size)
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = TransactionType.entries.size),
+                            colors = SegmentedButtonDefaults.colors(
+                                activeContainerColor = typeColor.copy(alpha = 0.15f),
+                                activeContentColor = typeColor,
+                                activeBorderColor = typeColor,
+                                inactiveContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                inactiveBorderColor = MaterialTheme.colorScheme.outlineVariant
+                            ),
+                            icon = {
+                                Icon(
+                                    imageVector = if (isIncome) Icons.Filled.Add else Icons.Filled.Remove,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         ) {
-                            Text(type.label)
+                            Text(
+                                text = type.label,
+                                fontWeight = if (transactionType == type) FontWeight.Bold else FontWeight.Medium
+                            )
                         }
                     }
                 }

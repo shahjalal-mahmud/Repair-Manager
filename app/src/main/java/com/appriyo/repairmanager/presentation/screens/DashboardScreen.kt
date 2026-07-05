@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Badge
@@ -123,21 +124,36 @@ fun DashboardScreen(navController: NavHostController) {
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-                IconButton(
-                    onClick = {
-                        navController.navigate(Screen.DeliveryList.passFilter(DeliveryFilter.TODAY.key))
-                    }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy((-8).dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    BadgedBox(
-                        badge = {
-                            if (summary.todayCount > 0) {
-                                Badge { Text(summary.todayCount.toString()) }
+                    IconButton(
+                        onClick = {
+                            navController.navigate(Screen.DeliveryList.passFilter(DeliveryFilter.TODAY.key))
+                        }
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                if (summary.todayCount > 0) {
+                                    Badge { Text(summary.todayCount.toString()) }
+                                }
                             }
+                        ) {
+                            Icon(
+                                Icons.Filled.Notifications,
+                                contentDescription = "Today's deliveries"
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = {
+                            navController.navigate(Screen.SmsSettings.route)
                         }
                     ) {
                         Icon(
-                            Icons.Filled.Notifications,
-                            contentDescription = "Today's deliveries"
+                            Icons.Filled.Settings,
+                            contentDescription = "Settings"
                         )
                     }
                 }

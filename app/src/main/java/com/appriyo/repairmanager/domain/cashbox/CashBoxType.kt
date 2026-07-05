@@ -19,6 +19,11 @@ enum class CashBoxType(
         firestoreId = "market",
         displayName = "Market Box",
         subtitle = "Cash used for market & daily expenses"
+    ),
+    CURRENT(
+        firestoreId = "current",
+        displayName = "Current Cash Box",
+        subtitle = "Daily shop cash flow tracker"
     );
 
     companion object {

@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material3.Card
@@ -115,12 +114,7 @@ fun CustomerListScreen(
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text("Repairs", fontWeight = FontWeight.SemiBold) },
-                    actions = {
-                        IconButton(onClick = { navController.navigate(Screen.SmsSettings.route) }) {
-                            Icon(Icons.Filled.Settings, contentDescription = "SMS Settings")
-                        }
-                    }
+                    title = { Text("Repairs", fontWeight = FontWeight.SemiBold) }
                 )
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     OutlinedTextField(

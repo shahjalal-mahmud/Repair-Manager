@@ -68,7 +68,12 @@ class SmsAutoSendManager(
         if (repair.id.isBlank() || repair.status.isBlank() || repair.phoneNumber.isBlank()) return
         if (!smsSender.hasSendPermission()) return // will be retried on the next snapshot once permission is granted
 
-        val message = SmsTemplateProvider.getMessage(repair.status, repair.customerName, repair.serialNumber)
+        val message = SmsTemplateProvider.getMessage(
+            status = repair.status,
+            customerName = repair.customerName,
+            serialNumber = repair.serialNumber,
+            paymentInfo = repair.paymentInfo
+        )
 
         val claimed = smsLogRepository.tryClaimLog(
             repairId = repair.id,

@@ -25,8 +25,8 @@ import com.appriyo.repairmanager.notifications.ReminderNotificationHelper
 import com.appriyo.repairmanager.presentation.screens.MainScreen
 import com.appriyo.repairmanager.presentation.viewmodel.MainViewModel
 import com.appriyo.repairmanager.ui.theme.RepairManagerTheme
-import org.koin.android.ext.android.get
 import org.koin.androidx.viewmodel.ext.android.viewModel
+import org.koin.java.KoinJavaComponent.get
 
 class MainActivity : ComponentActivity() {
 

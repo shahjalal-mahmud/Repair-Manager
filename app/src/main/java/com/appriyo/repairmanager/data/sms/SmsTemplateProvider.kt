@@ -21,11 +21,22 @@ object SmsTemplateProvider {
                 "Dear {customerName}, your repair request has been cancelled. Repair ID: {serialNumber}."
     )
 
-    fun getMessage(status: String, customerName: String, serialNumber: String): String {
+    fun getMessage(
+        status: String,
+        customerName: String,
+        serialNumber: String,
+        paymentInfo: String = ""
+    ): String {
         val template = templates[status]
             ?: "Dear {customerName}, your repair status has been updated to $status. Repair ID: {serialNumber}."
-        return template
+        val base = template
             .replace("{customerName}", customerName.ifBlank { "Customer" })
             .replace("{serialNumber}", serialNumber)
+        val trimmedPayment = paymentInfo.trim()
+        return if (trimmedPayment.isNotEmpty()) {
+            "$base Pay: $trimmedPayment."
+        } else {
+            base
+        }
     }
 }

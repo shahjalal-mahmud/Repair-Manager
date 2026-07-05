@@ -31,7 +31,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EventBusy
+import androidx.compose.material.icons.filled.RemoveRedEye
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.AlertDialog
@@ -75,12 +77,14 @@ import androidx.compose.ui.unit.dp
 import com.appriyo.repairmanager.data.model.EmployeeNote
 import com.appriyo.repairmanager.data.model.WorkerType
 import com.appriyo.repairmanager.presentation.components.DeleteConfirmationDialog
+import com.appriyo.repairmanager.presentation.components.PinProtectedAction
 import com.appriyo.repairmanager.presentation.components.TopToastHost
 import com.appriyo.repairmanager.presentation.state.LedgerSummary
 import com.appriyo.repairmanager.presentation.state.LedgerViewMode
 import com.appriyo.repairmanager.presentation.state.WorkerStats
 import com.appriyo.repairmanager.presentation.utils.LedgerDateUtils
 import com.appriyo.repairmanager.presentation.viewmodel.EmployeeNotesViewModel
+import com.appriyo.repairmanager.presentation.viewmodel.SecurityViewModel
 import org.koin.androidx.compose.koinViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -89,10 +93,22 @@ import java.util.Locale
 
 @Composable
 fun EmployeeScreen(
-    viewModel: EmployeeNotesViewModel = koinViewModel()
+    viewModel: EmployeeNotesViewModel = koinViewModel(),
+    securityViewModel: SecurityViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Money-value visibility. Locked by default so employees cannot see
+    // Payment / Profit / Cost. The owner unlocks with the same 6-digit PIN
+    // used elsewhere. State is local to this composable, so leaving and
+    // returning to the screen automatically re-locks the values.
+    var valuesUnlocked by remember { mutableStateOf(false) }
+
+    // Single PIN gate for edit/delete actions. Adding (FAB) is NOT gated:
+    // anyone can create new entries, but only the owner (PIN) can edit or
+    // delete existing ones.
+    val pinGate = PinProtectedAction(securityViewModel)
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { message ->
@@ -105,6 +121,7 @@ fun EmployeeScreen(
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             floatingActionButton = {
+                // Anyone can add new entries. No PIN gate on create.
                 FloatingActionButton(
                     onClick = { viewModel.openAddDialog() },
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -119,17 +136,27 @@ fun EmployeeScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                // ---- Top bar: title + month/day selector + search toggle ----
+                // ---- Top bar: title + month/day selector + visibility toggle + search toggle ----
                 TopBar(
                     viewMode = uiState.viewMode,
                     selectedDate = uiState.selectedDate,
                     selectedMonthStart = uiState.selectedMonthStart,
                     isSearchActive = uiState.isSearchActive,
+                    valuesUnlocked = valuesUnlocked,
                     onPickDate = { viewModel.openDatePicker() },
                     onPickMonth = { viewModel.openMonthPicker() },
                     onSwitchToDay = { viewModel.switchToDayView() },
                     onSwitchToMonth = { viewModel.switchToMonthView() },
-                    onToggleSearch = { viewModel.toggleSearch() }
+                    onToggleSearch = { viewModel.toggleSearch() },
+                    onToggleValuesVisibility = {
+                        if (valuesUnlocked) {
+                            // Already unlocked - tap to re-lock immediately.
+                            valuesUnlocked = false
+                        } else {
+                            // Require PIN to unlock.
+                            pinGate.prompt { valuesUnlocked = true }
+                        }
+                    }
                 )
 
                 // ---- Search field (only when toggled on) ----
@@ -152,13 +179,19 @@ fun EmployeeScreen(
                     ) {
                         // ---- Compact dashboard (single row of 4 stats) ----
                         item {
-                            CompactSummaryRow(summary = uiState.summary)
+                            CompactSummaryRow(
+                                summary = uiState.summary,
+                                valuesUnlocked = valuesUnlocked
+                            )
                             Spacer(Modifier.height(6.dp))
                         }
 
                         // ---- Worker breakdown (single compact row) ----
                         item {
-                            CompactWorkerBreakdown(summary = uiState.summary)
+                            CompactWorkerBreakdown(
+                                summary = uiState.summary,
+                                valuesUnlocked = valuesUnlocked
+                            )
                             Spacer(Modifier.height(8.dp))
                             EntriesHeader(count = uiState.filteredNotes.size)
                             Spacer(Modifier.height(6.dp))
@@ -176,8 +209,13 @@ fun EmployeeScreen(
                             items(uiState.filteredNotes, key = { it.id }) { note ->
                                 CompactEntryRow(
                                     note = note,
-                                    onEdit = { viewModel.openEditDialog(note) },
-                                    onDelete = { viewModel.requestDeleteNote(note) }
+                                    valuesUnlocked = valuesUnlocked,
+                                    onEdit = {
+                                        pinGate.prompt { viewModel.openEditDialog(note) }
+                                    },
+                                    onDelete = {
+                                        pinGate.prompt { viewModel.requestDeleteNote(note) }
+                                    }
                                 )
                                 Spacer(Modifier.height(6.dp))
                             }
@@ -250,11 +288,13 @@ private fun TopBar(
     selectedDate: Date,
     selectedMonthStart: Date,
     isSearchActive: Boolean,
+    valuesUnlocked: Boolean,
     onPickDate: () -> Unit,
     onPickMonth: () -> Unit,
     onSwitchToDay: () -> Unit,
     onSwitchToMonth: () -> Unit,
-    onToggleSearch: () -> Unit
+    onToggleSearch: () -> Unit,
+    onToggleValuesVisibility: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -281,6 +321,16 @@ private fun TopBar(
                 onPickMonth = onPickMonth,
                 onSwitchToDay = onSwitchToDay,
                 onSwitchToMonth = onSwitchToMonth
+            )
+        }
+        // Toggle for hiding / showing money values. Eye-open when values are
+        // masked (locked), eye-off when values are revealed.
+        IconButton(onClick = onToggleValuesVisibility) {
+            Icon(
+                imageVector = if (valuesUnlocked) Icons.Filled.VisibilityOff else Icons.Filled.RemoveRedEye,
+                contentDescription = if (valuesUnlocked) "Hide money values" else "Show money values",
+                tint = if (valuesUnlocked) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface
             )
         }
         IconButton(onClick = onToggleSearch) {
@@ -404,7 +454,7 @@ private fun DateOrMonthPill(
 // ---------------------------------------------------------------------
 
 @Composable
-private fun CompactSummaryRow(summary: LedgerSummary) {
+private fun CompactSummaryRow(summary: LedgerSummary, valuesUnlocked: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -417,19 +467,19 @@ private fun CompactSummaryRow(summary: LedgerSummary) {
         )
         MiniStat(
             label = "Payment",
-            value = formatCurrency(summary.totalPayment),
+            value = if (valuesUnlocked) formatCurrency(summary.totalPayment) else HIDDEN_MONEY_PLACEHOLDER,
             accent = Color(0xFF0EA5E9),
             modifier = Modifier.weight(1.4f)
         )
         MiniStat(
             label = "Profit",
-            value = formatCurrency(summary.totalProfit),
+            value = if (valuesUnlocked) formatCurrency(summary.totalProfit) else HIDDEN_MONEY_PLACEHOLDER,
             accent = Color(0xFF16A34A),
             modifier = Modifier.weight(1.4f)
         )
         MiniStat(
             label = "Cost",
-            value = formatCurrency(summary.totalCost),
+            value = if (valuesUnlocked) formatCurrency(summary.totalCost) else HIDDEN_MONEY_PLACEHOLDER,
             accent = Color(0xFFDC2626),
             modifier = Modifier.weight(1.2f)
         )
@@ -479,18 +529,30 @@ private fun MiniStat(
 // ---------------------------------------------------------------------
 
 @Composable
-private fun CompactWorkerBreakdown(summary: LedgerSummary) {
+private fun CompactWorkerBreakdown(summary: LedgerSummary, valuesUnlocked: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        CompactWorkerCard(stats = summary.workerAStats, modifier = Modifier.weight(1f))
-        CompactWorkerCard(stats = summary.workerBStats, modifier = Modifier.weight(1f))
+        CompactWorkerCard(
+            stats = summary.workerAStats,
+            valuesUnlocked = valuesUnlocked,
+            modifier = Modifier.weight(1f)
+        )
+        CompactWorkerCard(
+            stats = summary.workerBStats,
+            valuesUnlocked = valuesUnlocked,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
 @Composable
-private fun CompactWorkerCard(stats: WorkerStats, modifier: Modifier = Modifier) {
+private fun CompactWorkerCard(
+    stats: WorkerStats,
+    valuesUnlocked: Boolean,
+    modifier: Modifier = Modifier
+) {
     val color = workerColor(stats.workerType)
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -528,7 +590,11 @@ private fun CompactWorkerCard(stats: WorkerStats, modifier: Modifier = Modifier)
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "P ${formatAmount(stats.totalPayment)} · Pr ${formatAmount(stats.totalProfit)}",
+                    text = if (valuesUnlocked) {
+                        "P ${formatAmount(stats.totalPayment)} · Pr ${formatAmount(stats.totalProfit)}"
+                    } else {
+                        "P $HIDDEN_MONEY_PLACEHOLDER · Pr $HIDDEN_MONEY_PLACEHOLDER"
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -681,6 +747,7 @@ private fun EmptyEmployeeState(isSearching: Boolean, isMonthView: Boolean) {
 @Composable
 private fun CompactEntryRow(
     note: EmployeeNote,
+    valuesUnlocked: Boolean,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -758,19 +825,19 @@ private fun CompactEntryRow(
             ) {
                 InlineStat(
                     label = "Pay",
-                    value = formatAmount(note.totalPayment),
+                    value = if (valuesUnlocked) formatAmount(note.totalPayment) else HIDDEN_MONEY_PLACEHOLDER,
                     accent = Color(0xFF0EA5E9),
                     modifier = Modifier.weight(1f)
                 )
                 InlineStat(
                     label = "Profit",
-                    value = formatAmount(note.profit),
+                    value = if (valuesUnlocked) formatAmount(note.profit) else HIDDEN_MONEY_PLACEHOLDER,
                     accent = Color(0xFF16A34A),
                     modifier = Modifier.weight(1f)
                 )
                 InlineStat(
                     label = "Cost",
-                    value = formatAmount(cost),
+                    value = if (valuesUnlocked) formatAmount(cost) else HIDDEN_MONEY_PLACEHOLDER,
                     accent = Color(0xFFDC2626),
                     modifier = Modifier.weight(1f)
                 )
@@ -1125,6 +1192,12 @@ private fun RadioDot(selected: Boolean) {
 // ---------------------------------------------------------------------
 
 private fun formatCurrency(value: Double): String = "৳${formatAmount(value)}"
+
+/**
+ * Placeholder shown in place of any money value while the screen is locked.
+ * Looks like a real value at a glance but reveals nothing if it isn't.
+ */
+private const val HIDDEN_MONEY_PLACEHOLDER = "••••••"
 
 private fun formatAmount(value: Double): String {
     return if (value == value.toLong().toDouble()) {

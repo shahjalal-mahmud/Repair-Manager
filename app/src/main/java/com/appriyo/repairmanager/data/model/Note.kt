@@ -1,4 +1,3 @@
-// app/src/main/java/com/appriyo/repairmanager/data/model/Note.kt
 package com.appriyo.repairmanager.data.model
 
 import com.google.firebase.firestore.PropertyName
@@ -30,8 +29,20 @@ data class Note(
     var updatedAt: Date? = null,
 
     @get:PropertyName("createdBy") @set:PropertyName("createdBy")
-    var createdBy: String = ""
-)
+    var createdBy: String = "",
+
+    /**
+     * Stored category value (kept as a primitive so Firestore's POJO
+     * deserialization works without surprises). Use [categoryEnum] when
+     * reading and convert back via [storageValue] when writing.
+     * Old documents without this field default to [NoteCategory.GENERAL].
+     */
+    @get:PropertyName("category") @set:PropertyName("category")
+    var category: String = NoteCategory.GENERAL.storageValue
+) {
+    /** Typed view of [category] so call sites don't have to call [NoteCategory.fromStorageValue] themselves. */
+    val categoryEnum: NoteCategory get() = NoteCategory.fromStorageValue(category)
+}
 
 /**
  * Firestore collection path constant for the Notes module.

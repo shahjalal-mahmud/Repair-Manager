@@ -7,6 +7,7 @@ import com.appriyo.repairmanager.data.media.MediaAttachment
 import com.appriyo.repairmanager.data.media.MediaStorageManager
 import com.appriyo.repairmanager.data.media.NoteMediaStore
 import com.appriyo.repairmanager.data.model.Note
+import com.appriyo.repairmanager.data.model.NoteCategory
 import com.appriyo.repairmanager.data.repository.AuthRepository
 import com.appriyo.repairmanager.data.repository.NotesRepository
 import com.appriyo.repairmanager.presentation.components.ToastMessage
@@ -55,6 +56,16 @@ class NotesViewModel(
         _uiState.value = _uiState.value.copy(searchQuery = query)
     }
 
+    /** Called when the user taps a category tab. No-op when the tab is already active. */
+    fun onTabSelected(category: NoteCategory) {
+        if (_uiState.value.selectedTab == category) return
+        _uiState.value = _uiState.value.copy(selectedTab = category)
+    }
+
+    fun onDraftCategoryChange(category: NoteCategory) {
+        _uiState.value = _uiState.value.copy(draftCategory = category)
+    }
+
     fun openAddDialog() {
         // Note doesn't exist yet, so new photos are namespaced under a throwaway draft id
         // until the note is actually saved (see saveNote).
@@ -65,7 +76,8 @@ class NotesViewModel(
             editingNote = null,
             titleError = null,
             editingAttachments = emptyList(),
-            currentDraftId = draftId
+            currentDraftId = draftId,
+            draftCategory = _uiState.value.selectedTab
         )
     }
 
@@ -77,7 +89,8 @@ class NotesViewModel(
             editingNote = note,
             titleError = null,
             editingAttachments = attachments,
-            currentDraftId = note.id
+            currentDraftId = note.id,
+            draftCategory = note.categoryEnum
         )
     }
 
@@ -115,7 +128,13 @@ class NotesViewModel(
         attachmentsSnapshotOnOpen = emptyList()
     }
 
-    fun saveNote(title: String, description: String) {
+    /**
+     * Persists a note. [category] is the bucket chosen in the dialog (General /
+     * Reminder / Important). When creating, the active tab is bumped to the
+     * just-saved category so the user sees their new note right away without
+     * having to manually switch tabs.
+     */
+    fun saveNote(title: String, description: String, category: NoteCategory) {
         if (title.isBlank()) {
             _uiState.value = _uiState.value.copy(titleError = "Title is required.")
             return
@@ -126,22 +145,36 @@ class NotesViewModel(
         val attachmentsToPersist = _uiState.value.editingAttachments
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isSaving = true, errorMessage = null, titleError = null)
+            _uiState.value = _uiState.value.copy(
+                isSaving = true,
+                errorMessage = null,
+                titleError = null
+            )
 
             if (editingNoteId == null) {
                 val createdBy = authRepository.getCurrentUser()?.uid.orEmpty()
-                notesRepository.createNote(title.trim(), description.trim(), createdBy).fold(
+                notesRepository.createNote(
+                    title = title.trim(),
+                    description = description.trim(),
+                    category = category.storageValue,
+                    createdBy = createdBy
+                ).fold(
                     onSuccess = { note ->
                         noteMediaStore.setAttachments(note.id, attachmentsToPersist)
-                        onSaveSuccess(isEditing = false)
+                        onSaveSuccess(isEditing = false, savedCategory = category)
                     },
                     onFailure = { onSaveFailure(it) }
                 )
             } else {
-                notesRepository.updateNote(editingNoteId, title.trim(), description.trim()).fold(
+                notesRepository.updateNote(
+                    noteId = editingNoteId,
+                    title = title.trim(),
+                    description = description.trim(),
+                    category = category.storageValue
+                ).fold(
                     onSuccess = {
                         noteMediaStore.setAttachments(editingNoteId, attachmentsToPersist)
-                        onSaveSuccess(isEditing = true)
+                        onSaveSuccess(isEditing = true, savedCategory = category)
                     },
                     onFailure = { onSaveFailure(it) }
                 )
@@ -149,7 +182,7 @@ class NotesViewModel(
         }
     }
 
-    private fun onSaveSuccess(isEditing: Boolean) {
+    private fun onSaveSuccess(isEditing: Boolean, savedCategory: NoteCategory) {
         attachmentsSnapshotOnOpen = emptyList()
         _uiState.value = _uiState.value.copy(
             isSaving = false,
@@ -158,6 +191,10 @@ class NotesViewModel(
             editingAttachments = emptyList(),
             currentDraftId = "",
             errorMessage = null,
+            // Jump to the tab the user just saved into so the new/edited note
+            // is immediately visible. For edits, also clear any active search.
+            selectedTab = savedCategory,
+            searchQuery = if (isEditing) _uiState.value.searchQuery else "",
             mediaRefreshTick = _uiState.value.mediaRefreshTick + 1,
             toast = ToastMessage(if (isEditing) "Note updated" else "Note added")
         )

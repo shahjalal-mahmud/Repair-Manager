@@ -1,4 +1,3 @@
-// app/src/main/java/com/appriyo/repairmanager/presentation/screens/NotesScreen.kt
 package com.appriyo.repairmanager.presentation.screens
 
 import android.Manifest
@@ -19,8 +18,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -61,6 +60,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -86,7 +87,11 @@ import com.appriyo.repairmanager.data.media.MediaType
 import com.appriyo.repairmanager.data.media.NoteMediaStore
 import com.appriyo.repairmanager.data.media.loadMediaThumbnail
 import com.appriyo.repairmanager.data.model.Note
+import com.appriyo.repairmanager.data.model.NoteCategory
+import com.appriyo.repairmanager.presentation.components.CategorySelector
 import com.appriyo.repairmanager.presentation.components.DeleteConfirmationDialog
+import com.appriyo.repairmanager.presentation.components.NoteCategoryBadge
+import com.appriyo.repairmanager.presentation.components.NoteCategoryTabsWithCounts
 import com.appriyo.repairmanager.presentation.components.TopToastHost
 import com.appriyo.repairmanager.presentation.viewmodel.NotesViewModel
 import kotlinx.coroutines.launch
@@ -110,7 +115,9 @@ fun NotesScreen(
         }
     }
 
-    val filteredNotes = remember(uiState.notes, uiState.searchQuery) {
+    // Search is always global across all categories; the tab only narrows the
+    // displayed list when the search box is empty.
+    val searchedNotes = remember(uiState.notes, uiState.searchQuery) {
         if (uiState.searchQuery.isBlank()) {
             uiState.notes
         } else {
@@ -121,93 +128,98 @@ fun NotesScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            floatingActionButton = {
-                ExtendedFloatingActionButton(
-                    onClick = { viewModel.openAddDialog() },
-                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                    text = { Text("Add Note") },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+    val displayedNotes = remember(
+        searchedNotes,
+        uiState.selectedTab,
+        uiState.searchQuery
+    ) {
+        if (uiState.searchQuery.isNotBlank()) searchedNotes
+        else searchedNotes.filter { it.categoryEnum == uiState.selectedTab }
+    }
+
+    // Counts come from the raw list so the tab badges stay accurate while the user is searching.
+    val tabCounts = remember(uiState.notes) {
+        val byCategory = uiState.notes.groupingBy { it.categoryEnum }.eachCount()
+        NoteCategory.entries.associateWith { byCategory[it] ?: 0 }
+    }
+
+    Scaffold(
+        topBar = {
+            NotesTopBar(
+                searchQuery = uiState.searchQuery,
+                onSearchQueryChange = { viewModel.onSearchQueryChange(it) },
+                selectedTab = uiState.selectedTab,
+                tabCounts = tabCounts,
+                onTabSelected = { viewModel.onTabSelected(it) }
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { viewModel.openAddDialog() },
+                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                text = { Text("Add Note") },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            when {
+                uiState.isLoading -> LoadingState()
+                displayedNotes.isEmpty() -> EmptyNotesState(
+                    isSearching = uiState.searchQuery.isNotBlank(),
+                    activeTab = uiState.selectedTab
                 )
-            }
-        ) { paddingValues ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 16.dp)
-            ) {
-                Spacer(Modifier.height(8.dp))
-
-                Text(
-                    text = "Notes",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = if (uiState.notes.isEmpty()) {
-                        "Keep track of everything important"
-                    } else {
-                        "${uiState.notes.size} ${if (uiState.notes.size == 1) "note" else "notes"}"
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(Modifier.height(16.dp))
-
-                NotesSearchField(
-                    value = uiState.searchQuery,
-                    onValueChange = { viewModel.onSearchQueryChange(it) }
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                when {
-                    uiState.isLoading -> LoadingState()
-                    filteredNotes.isEmpty() -> EmptyNotesState(isSearching = uiState.searchQuery.isNotBlank())
-                    else -> {
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                            contentPadding = PaddingValues(bottom = 96.dp)
-                        ) {
-                            items(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(
-                                    note = note,
-                                    mediaVersion = uiState.mediaRefreshTick,
-                                    onEdit = { viewModel.openEditDialog(note) },
-                                    onDelete = { viewModel.requestDeleteNote(note) }
-                                )
-                            }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(top = 12.dp, bottom = 96.dp)
+                    ) {
+                        items(displayedNotes, key = { it.id }) { note ->
+                            NoteCard(
+                                note = note,
+                                mediaVersion = uiState.mediaRefreshTick,
+                                onEdit = { viewModel.openEditDialog(note) },
+                                onDelete = { viewModel.requestDeleteNote(note) }
+                            )
                         }
                     }
                 }
             }
         }
-
-        TopToastHost(
-            toast = uiState.toast,
-            onConsumed = { viewModel.consumeToast() },
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
     }
+
+    TopToastHost(
+        toast = uiState.toast,
+        onConsumed = { viewModel.consumeToast() },
+        modifier = Modifier
+    )
 
     if (uiState.isDialogOpen) {
         NoteEditDialog(
             initialTitle = uiState.editingNote?.title ?: "",
             initialDescription = uiState.editingNote?.description ?: "",
+            category = uiState.draftCategory,
             attachments = uiState.editingAttachments,
             draftId = uiState.currentDraftId,
             isSaving = uiState.isSaving,
             titleError = uiState.titleError,
             isEditing = uiState.editingNote != null,
+            onCategoryChange = { viewModel.onDraftCategoryChange(it) },
             onAddAttachment = { viewModel.addMediaAttachment(it) },
             onRemoveAttachment = { viewModel.removeMediaAttachment(it) },
             onDismiss = { viewModel.dismissDialog() },
-            onSave = { title, description -> viewModel.saveNote(title, description) }
+            onSave = { title, description, category ->
+                viewModel.saveNote(title, description, category)
+            }
         )
     }
 
@@ -222,12 +234,57 @@ fun NotesScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NotesSearchField(value: String, onValueChange: (String) -> Unit) {
+private fun NotesTopBar(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    selectedTab: NoteCategory,
+    tabCounts: Map<NoteCategory, Int>,
+    onTabSelected: (NoteCategory) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+    ) {
+        TopAppBar(
+            title = {
+                Text(
+                    text = "Notes",
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+                titleContentColor = MaterialTheme.colorScheme.onSurface
+            )
+        )
+
+        NotesSearchField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+        )
+
+        NoteCategoryTabsWithCounts(
+            selected = selectedTab,
+            counts = tabCounts,
+            onSelect = onTabSelected
+        )
+    }
+}
+
+@Composable
+private fun NotesSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        placeholder = { Text("Search notes") },
+        placeholder = { Text("Search all notes") },
         singleLine = true,
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
@@ -242,7 +299,7 @@ private fun NotesSearchField(value: String, onValueChange: (String) -> Unit) {
             unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
             focusedBorderColor = MaterialTheme.colorScheme.primary
         ),
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
     )
 }
 
@@ -253,10 +310,37 @@ private fun LoadingState() {
     }
 }
 
+/** Pair of (title, subtitle) strings for the empty state — single source of truth per branch. */
+private data class EmptyCopy(val title: String, val subtitle: String)
+
 @Composable
-private fun EmptyNotesState(isSearching: Boolean) {
+private fun EmptyNotesState(
+    isSearching: Boolean,
+    activeTab: NoteCategory
+) {
+    val copy = when {
+        isSearching -> EmptyCopy(
+            title = "No matching notes",
+            subtitle = "Try a different search term — results can come from any category"
+        )
+        activeTab == NoteCategory.GENERAL -> EmptyCopy(
+            title = "No general notes yet",
+            subtitle = "Tap + to add your first note"
+        )
+        activeTab == NoteCategory.REMINDER -> EmptyCopy(
+            title = "No reminders yet",
+            subtitle = "Tap + to set a reminder for later"
+        )
+        else -> EmptyCopy(
+            title = "No important notes saved",
+            subtitle = "Tap + to save something worth keeping"
+        )
+    }
+
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -276,20 +360,19 @@ private fun EmptyNotesState(isSearching: Boolean) {
         }
         Spacer(Modifier.height(16.dp))
         Text(
-            text = if (isSearching) "No matching notes" else "No notes yet",
+            text = copy.title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = if (isSearching) "Try a different search term" else "Tap + to add your first note",
+            text = copy.subtitle,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NoteCard(
     note: Note,
@@ -345,8 +428,13 @@ private fun NoteCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                Spacer(Modifier.height(4.dp))
+
+                NoteCategoryBadge(category = note.categoryEnum)
+
                 if (note.description.isNotBlank()) {
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         text = note.description,
                         style = MaterialTheme.typography.bodyMedium,
@@ -430,20 +518,33 @@ private fun NoteThumbnailBadge(attachment: MediaAttachment, extraCount: Int) {
     }
 }
 
+/** Small section label used inside the Add/Edit dialog to give each form group a clear heading. */
+@Composable
+private fun FormSectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NoteEditDialog(
     initialTitle: String,
     initialDescription: String,
+    category: NoteCategory,
     attachments: List<MediaAttachment>,
     draftId: String,
     isSaving: Boolean,
     titleError: String?,
     isEditing: Boolean,
+    onCategoryChange: (NoteCategory) -> Unit,
     onAddAttachment: (MediaAttachment) -> Unit,
     onRemoveAttachment: (MediaAttachment) -> Unit,
     onDismiss: () -> Unit,
-    onSave: (String, String) -> Unit
+    onSave: (String, String, NoteCategory) -> Unit
 ) {
     var title by remember(initialTitle) { mutableStateOf(initialTitle) }
     var description by remember(initialDescription) { mutableStateOf(initialDescription) }
@@ -460,9 +561,20 @@ private fun NoteEditDialog(
         text = {
             Column(
                 modifier = Modifier
-                    .heightIn(max = 480.dp)
-                    .verticalScroll(rememberScrollState())
+                    .fillMaxWidth()
+                    .heightIn(max = 540.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                FormSectionLabel(text = "Category")
+                CategorySelector(
+                    selected = category,
+                    onChange = onCategoryChange,
+                    enabled = !isSaving,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                FormSectionLabel(text = "Details")
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
@@ -479,11 +591,10 @@ private fun NoteEditDialog(
                     label = { Text("Description") },
                     minLines = 3,
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 10.dp)
+                    modifier = Modifier.fillMaxWidth()
                 )
 
+                FormSectionLabel(text = "Attachments")
                 NotePhotosSection(
                     attachments = attachments,
                     draftId = draftId,
@@ -497,7 +608,7 @@ private fun NoteEditDialog(
             Button(
                 enabled = !isSaving,
                 shape = RoundedCornerShape(12.dp),
-                onClick = { onSave(title, description) }
+                onClick = { onSave(title, description, category) }
             ) {
                 Text(if (isSaving) "Saving..." else "Save")
             }
@@ -599,7 +710,7 @@ private fun NotePhotosSection(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = "Photos $photoCount/$maxPhotos",
             style = MaterialTheme.typography.labelMedium,
@@ -648,7 +759,7 @@ private fun NotePhotosSection(
 
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "Stored privately on this device. Not uploaded — safe even if you uninstall or update the app.",
+            text = "Stored privately on this device. Not uploaded.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

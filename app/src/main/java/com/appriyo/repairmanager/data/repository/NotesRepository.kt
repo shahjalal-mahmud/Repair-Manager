@@ -37,6 +37,7 @@ class NotesRepository(
     suspend fun createNote(
         title: String,
         description: String,
+        category: String,
         createdBy: String
     ): Result<Note> {
         return try {
@@ -46,6 +47,7 @@ class NotesRepository(
                 "id" to newNoteRef.id,
                 "title" to title,
                 "description" to description,
+                "category" to category,
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp(),
                 "createdBy" to createdBy
@@ -58,6 +60,7 @@ class NotesRepository(
                     id = newNoteRef.id,
                     title = title,
                     description = description,
+                    category = category,
                     createdAt = null,
                     updatedAt = null,
                     createdBy = createdBy
@@ -77,12 +80,14 @@ class NotesRepository(
     suspend fun updateNote(
         noteId: String,
         title: String,
-        description: String
+        description: String,
+        category: String
     ): Result<Unit> {
         return try {
             val updates = hashMapOf<String, Any?>(
                 "title" to title,
                 "description" to description,
+                "category" to category,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
 

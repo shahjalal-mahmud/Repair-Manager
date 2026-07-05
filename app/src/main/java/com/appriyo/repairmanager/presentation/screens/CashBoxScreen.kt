@@ -42,7 +42,9 @@ import com.appriyo.repairmanager.presentation.components.CashBoxLoadingState
 import com.appriyo.repairmanager.presentation.components.CashBoxStatsRow
 import com.appriyo.repairmanager.presentation.components.CashTransactionCard
 import com.appriyo.repairmanager.presentation.components.DeleteConfirmationDialog
+import com.appriyo.repairmanager.presentation.components.PinProtectedAction
 import com.appriyo.repairmanager.presentation.viewmodel.CashBoxViewModel
+import com.appriyo.repairmanager.presentation.viewmodel.SecurityViewModel
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -59,13 +61,19 @@ fun CashBoxScreen(
     viewModel: CashBoxViewModel = koinViewModel(
         key = "cashbox_${accountType.firestoreId}",
         parameters = { parametersOf(accountType) }
-    )
+    ),
+    securityViewModel: SecurityViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var editingTransaction by remember { mutableStateOf<CashTransaction?>(null) }
     var pendingDelete by remember { mutableStateOf<CashTransaction?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // PIN gate. Each sensitive action (add / edit / delete) prompts the owner
+    // for their 6-digit PIN independently. The dialog and verification are
+    // owned by PinProtectedAction / SecurityViewModel.
+    val pinGate = PinProtectedAction(securityViewModel)
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { message ->
@@ -87,7 +95,9 @@ fun CashBoxScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
+            FloatingActionButton(onClick = {
+                pinGate.prompt { showAddDialog = true }
+            }) {
                 Icon(Icons.Default.Add, contentDescription = "Add transaction")
             }
         }
@@ -119,8 +129,12 @@ fun CashBoxScreen(
                 else -> items(uiState.transactions, key = { it.id }) { transaction ->
                     CashTransactionCard(
                         transaction = transaction,
-                        onClick = { editingTransaction = transaction },
-                        onDeleteClick = { pendingDelete = transaction }
+                        onClick = {
+                            pinGate.prompt { editingTransaction = transaction }
+                        },
+                        onDeleteClick = {
+                            pinGate.prompt { pendingDelete = transaction }
+                        }
                     )
                 }
             }

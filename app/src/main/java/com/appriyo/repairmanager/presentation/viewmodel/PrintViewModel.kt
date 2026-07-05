@@ -7,6 +7,7 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.appriyo.repairmanager.data.model.ProductSell
 import com.appriyo.repairmanager.data.model.Repair
 import com.appriyo.repairmanager.printing.InvoiceFormatter
 import com.appriyo.repairmanager.printing.POSPrinterHelper
@@ -48,6 +49,64 @@ class PrintViewModel(private val context: Context) : ViewModel() {
             _uiState.value = _uiState.value.copy(isPrinting = true, errorMessage = null)
 
             val invoiceText = InvoiceFormatter.buildInvoiceText(repair)
+
+            val printResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    if (!printerHelper.connectToPrinter()) {
+                        return@withContext Result.failure(Exception("Could not connect to printer. Make sure it's paired, powered on, and in range."))
+                    }
+
+                    if (!printerHelper.printText(invoiceText)) {
+                        return@withContext Result.failure(Exception("Printer connected but failed to send data."))
+                    }
+
+                    Result.success(Unit)
+                } catch (e: Exception) {
+                    Result.failure(e)
+                } finally {
+                    printerHelper.disconnect()
+                }
+            }
+
+            printResult.fold(
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(
+                        isPrinting = false,
+                        successMessage = "Invoice printed successfully."
+                    )
+                },
+                onFailure = { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isPrinting = false,
+                        errorMessage = e.localizedMessage ?: "Print failed."
+                    )
+                }
+            )
+        }
+    }
+
+    /**
+     * Generates a sale-invoice for [sell] and prints it using the hardcoded
+     * POS printer. Reuses the same connection / error-handling logic as
+     * [printRepair]; only the invoice text differs.
+     */
+    fun printProductSell(sell: ProductSell) {
+        val missingPermissions = getRequiredPermissions().filter { permission ->
+            ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (missingPermissions.isNotEmpty()) {
+            _uiState.value = _uiState.value.copy(
+                missingPermissions = missingPermissions,
+                errorMessage = "Bluetooth permissions required"
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isPrinting = true, errorMessage = null)
+
+            val invoiceText = InvoiceFormatter.buildInvoiceText(sell)
 
             val printResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 try {

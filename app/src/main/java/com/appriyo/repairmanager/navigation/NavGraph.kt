@@ -22,6 +22,7 @@ import com.appriyo.repairmanager.presentation.screens.EditRepairScreen
 import com.appriyo.repairmanager.presentation.screens.EmployeeScreen
 import com.appriyo.repairmanager.presentation.screens.LoginScreen
 import com.appriyo.repairmanager.presentation.screens.NotesScreen
+import com.appriyo.repairmanager.presentation.screens.ProductSellListScreen
 import com.appriyo.repairmanager.presentation.screens.SmsSettingsScreen
 import com.appriyo.repairmanager.presentation.screens.TaliKhataScreen
 
@@ -111,6 +112,11 @@ fun NavGraph(
         ) { backStackEntry ->
             val typeKey = backStackEntry.arguments?.getString("accountType") ?: CashBoxType.PRODUCT.firestoreId
             CashBoxScreen(navController, CashBoxType.fromFirestoreId(typeKey))
+        }
+
+        // Product Sell / POS Invoice (new)
+        composable(Screen.ProductSellList.route) {
+            ProductSellListScreen(navController)
         }
     }
 }

@@ -1,7 +1,9 @@
 package com.appriyo.repairmanager.printing
 
+import com.appriyo.repairmanager.data.model.ProductSell
 import com.appriyo.repairmanager.data.model.Repair
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
 /**
@@ -141,6 +143,126 @@ object InvoiceFormatter {
             "Pattern" -> "Pattern: ${repair.pattern.take(16)}"
             "Password & Pattern" -> "PWD+Pattern"
             else -> repair.securityType
+        }
+    }
+
+    // ======================== PRODUCT SELL INVOICE ========================
+
+    /**
+     * Builds a formatted sale-invoice text string from a [ProductSell]
+     * record. This is a separate, professionally laid-out invoice intended
+     * to be handed to the customer when they purchase a product, and it
+     * prominently surfaces the warranty details with computed expiry date.
+     *
+     * The store header (name, address, contact) is intentionally reused
+     * from the same hardcoded values as [buildInvoiceText] so both
+     * invoices share a consistent brand.
+     *
+     * @param sell The product sell record to format
+     * @return A plain-text invoice string formatted for ESC/POS printing
+     */
+    fun buildInvoiceText(sell: ProductSell): String {
+        val sellDate = sell.createdAt?.let { DATE_FORMATTER.format(it) } ?: "-"
+        val sellTime = sell.createdAt?.let {
+            SimpleDateFormat("hh:mm a", Locale.US).format(it)
+        } ?: "-"
+        val warrantyStart = sell.warrantyStartDate.ifBlank { sellDate }
+        val warrantyExpiry = computeWarrantyExpiry(warrantyStart, sell.warrantyMonths)
+        val balanceDue = (sell.productPrice - sell.paymentAmount).coerceAtLeast(0.0)
+
+        return buildString {
+            // --- Store Header ---
+            appendLine("  ${STORE_NAME.uppercase().take(28)}")
+            appendLine("  ${STORE_ADDRESS.take(30)}")
+            appendLine("  Call: ${STORE_PHONE.take(20)}")
+            appendLine(LINE_SEPARATOR)
+
+            // --- Invoice Metadata ---
+            appendLine("SALE INVOICE: ${sell.serialNumber}")
+            appendLine("DATE    : $sellDate   TIME: $sellTime")
+            appendLine(LINE_SEPARATOR)
+
+            // --- Product Information ---
+            appendLine("PRODUCT INFO")
+            appendLine("Item    : ${sell.productName.take(24)}")
+            if (sell.productSerial.isNotBlank()) {
+                appendLine("S/N     : ${sell.productSerial.take(24)}")
+            }
+            appendLine(LINE_SEPARATOR)
+
+            // --- Pricing ---
+            appendLine("PRICING")
+            appendLine("Price   : Taka ${formatMoney(sell.productPrice)}")
+            appendLine("Paid    : Taka ${formatMoney(sell.paymentAmount)}")
+            if (balanceDue > 0.0) {
+                appendLine("Due     : Taka ${formatMoney(balanceDue)}")
+            }
+            appendLine(LINE_SEPARATOR)
+
+            // --- Warranty Information ---
+            appendLine("WARRANTY")
+            if (sell.warrantyMonths > 0) {
+                appendLine("Period  : ${sell.warrantyMonths} Month(s)")
+                appendLine("From    : ${warrantyStart.take(16)}")
+                appendLine("Until   : ${warrantyExpiry.take(16)}")
+            } else {
+                appendLine("Period  : No Warranty")
+            }
+            if (sell.warrantyDetails.isNotBlank()) {
+                appendLine("Terms   : ${sell.warrantyDetails.take(22)}")
+            }
+            appendLine(LINE_SEPARATOR)
+
+            // --- Additional Notes (Optional) ---
+            if (sell.notes.isNotBlank()) {
+                appendLine("NOTES")
+                appendLine("Notes   : ${sell.notes.take(22)}")
+                appendLine(LINE_SEPARATOR)
+            }
+
+            // --- Footer ---
+            appendLine("   THANK YOU FOR YOUR PURCHASE!")
+            appendLine(" Keep this invoice for warranty.")
+            appendLine()
+            appendLine()
+            appendLine()
+        }
+    }
+
+    /**
+     * Formats a monetary amount with two decimals, no thousand separator so
+     * it stays compact on a 32-char thermal receipt.
+     */
+    private fun formatMoney(value: Double): String {
+        return String.format(Locale.US, "%.2f", value)
+    }
+
+    /**
+     * Computes the warranty expiry date as a dd/MM/yyyy string by adding
+     * [months] to [startDate]. Returns "-" when:
+     *  - [startDate] is blank
+     *  - [months] is 0 or negative
+     *  - the start date can't be parsed
+     *
+     * The parser is permissive: it accepts dd/MM/yyyy and dd-MM-yyyy,
+     * matching the formats used elsewhere in the app.
+     */
+    private fun computeWarrantyExpiry(startDate: String, months: Int): String {
+        if (startDate.isBlank() || months <= 0) return "-"
+        val parts = startDate.split('/', '-').takeIf { it.size == 3 } ?: return "-"
+        return try {
+            val day = parts[0].trim().toInt()
+            val month = parts[1].trim().toInt()
+            val year = parts[2].trim().toInt()
+            val cal = Calendar.getInstance().apply {
+                setLenient(false)
+                clear()
+                set(year, month - 1, day)
+                add(Calendar.MONTH, months)
+            }
+            DATE_FORMATTER.format(cal.time)
+        } catch (_: Exception) {
+            "-"
         }
     }
 }

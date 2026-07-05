@@ -33,4 +33,7 @@ sealed class Screen(val route: String) {
     object CashBox : Screen("cash_box/{accountType}") {
         fun passType(type: CashBoxType) = "cash_box/${type.firestoreId}"
     }
+
+    // Product Sell / POS Invoice screen (new)
+    object ProductSellList : Screen("product_sell_list")
 }

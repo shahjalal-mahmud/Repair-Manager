@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Badge
@@ -78,6 +79,12 @@ fun DashboardScreen(navController: NavHostController) {
             subtitle = "Create a new job",
             icon = Icons.Default.Add,
             route = Screen.AddRepair.route
+        ),
+        DashboardFeature(
+            title = "Product Sell",
+            subtitle = "Issue sale invoice",
+            icon = Icons.Default.ShoppingCart,
+            route = Screen.ProductSellList.route
         ),
         DashboardFeature(
             title = "Customers",

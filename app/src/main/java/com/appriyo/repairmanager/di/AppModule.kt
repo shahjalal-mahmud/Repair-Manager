@@ -10,6 +10,7 @@ import com.appriyo.repairmanager.data.repository.CashBoxRepository
 import com.appriyo.repairmanager.data.repository.EmployeeNotesRepository
 import com.appriyo.repairmanager.data.repository.FirestoreUserProvider
 import com.appriyo.repairmanager.data.repository.NotesRepository
+import com.appriyo.repairmanager.data.repository.ProductSellRepository
 import com.appriyo.repairmanager.data.repository.RepairRepository
 import com.appriyo.repairmanager.data.repository.SecurityRepository
 import com.appriyo.repairmanager.data.repository.SmsLogRepository
@@ -30,6 +31,7 @@ import com.appriyo.repairmanager.presentation.viewmodel.EmployeeNotesViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.MainViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.NotesViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.PrintViewModel
+import com.appriyo.repairmanager.presentation.viewmodel.ProductSellViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.SecurityViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.SmsSettingsViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.TaliKhataViewModel
@@ -58,6 +60,7 @@ val appModule = module {
     single { SmsLogRepository(get(), get()) }
     single { TaliKhataRepository(get(), get()) }
     single { CashBoxRepository(get(), get()) }
+    single { ProductSellRepository(get(), get()) }
 
     // Local-only media (never synced to Firestore)
     single { MediaStorageManager(androidContext()) }
@@ -85,4 +88,5 @@ val appModule = module {
     viewModel { (filterKey: String) -> DeliveryListViewModel(get(), filterKey) }
     viewModel { (accountType: CashBoxType) -> CashBoxViewModel(get(), accountType) }
     viewModel { SecurityViewModel(get()) }
+    viewModel { ProductSellViewModel(get(), get(), get()) }
 }

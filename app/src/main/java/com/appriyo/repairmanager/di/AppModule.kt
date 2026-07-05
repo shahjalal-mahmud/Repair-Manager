@@ -11,6 +11,7 @@ import com.appriyo.repairmanager.data.repository.EmployeeNotesRepository
 import com.appriyo.repairmanager.data.repository.FirestoreUserProvider
 import com.appriyo.repairmanager.data.repository.NotesRepository
 import com.appriyo.repairmanager.data.repository.RepairRepository
+import com.appriyo.repairmanager.data.repository.SecurityRepository
 import com.appriyo.repairmanager.data.repository.SmsLogRepository
 import com.appriyo.repairmanager.data.repository.TaliKhataRepository
 import com.appriyo.repairmanager.data.sms.DeviceIdProvider
@@ -29,6 +30,7 @@ import com.appriyo.repairmanager.presentation.viewmodel.EmployeeNotesViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.MainViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.NotesViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.PrintViewModel
+import com.appriyo.repairmanager.presentation.viewmodel.SecurityViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.SmsSettingsViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.TaliKhataViewModel
 import com.google.firebase.auth.FirebaseAuth
@@ -52,6 +54,7 @@ val appModule = module {
     single { NotesRepository(get(), get()) }
     single { EmployeeNotesRepository(get(), get()) }
     single { AppSettingsRepository(get(), get()) }
+    single { SecurityRepository(get(), get()) }
     single { SmsLogRepository(get(), get()) }
     single { TaliKhataRepository(get(), get()) }
     single { CashBoxRepository(get(), get()) }
@@ -76,9 +79,10 @@ val appModule = module {
     viewModel { EditRepairViewModel(get()) }
     viewModel { NotesViewModel(get(), get(), get(), get()) }
     viewModel { EmployeeNotesViewModel(get(), get()) }
-    viewModel { SmsSettingsViewModel(get(), get(), get()) }
+    viewModel { SmsSettingsViewModel(get(), get(), get(), get()) }
     viewModel { TaliKhataViewModel(get(), get()) }
     viewModel { DashboardViewModel(get()) }
     viewModel { (filterKey: String) -> DeliveryListViewModel(get(), filterKey) }
     viewModel { (accountType: CashBoxType) -> CashBoxViewModel(get(), accountType) }
+    viewModel { SecurityViewModel(get()) }
 }

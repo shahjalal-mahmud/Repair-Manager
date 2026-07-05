@@ -31,6 +31,7 @@ fun SendSmsButton(
     serialNumber: String,
     status: String,
     phoneNumber: String,
+    paymentInfo: String = "",
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -42,7 +43,7 @@ fun SendSmsButton(
                 Toast.makeText(context, "No phone number on file for this customer.", Toast.LENGTH_SHORT).show()
                 return@Button
             }
-            val message = SmsTemplateProvider.getMessage(status, customerName, serialNumber)
+            val message = SmsTemplateProvider.getMessage(status, customerName, serialNumber, paymentInfo)
             val intent = Intent(Intent.ACTION_SENDTO).apply {
                 data = Uri.parse("smsto:$phoneNumber")
                 putExtra("sms_body", message)

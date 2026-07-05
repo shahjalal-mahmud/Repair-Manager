@@ -137,6 +137,12 @@ fun PinEntryDialog(
 
                 // The visible row of 6 boxes. Fills the full dialog width so
                 // every box can take an equal share via Modifier.weight(1f).
+                // Note: we deliberately pass `masked = true` so the boxes
+                // render a bullet ("•") instead of the actual digit. This
+                // prevents shoulder-surfing while still letting the user
+                // count how many digits they've entered (same UX as a
+                // standard password field). The hidden BasicTextField above
+                // owns the real value; the boxes are a pure projection.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -147,7 +153,8 @@ fun PinEntryDialog(
                         val isFocused = char.isEmpty() && index == value.text.length
                         PinDigitBox(
                             char = char,
-                            isFocused = isFocused
+                            isFocused = isFocused,
+                            masked = true
                         )
                     }
                 }
@@ -183,7 +190,15 @@ fun PinEntryDialog(
  * A single OTP cell. Three states:
  *  - **Empty / not next** → light border, neutral background.
  *  - **Empty / next**     → colored border + blinking caret cursor.
- *  - **Filled**           → colored border + tinted background + bold digit.
+ *  - **Filled**           → colored border + tinted background + (masked
+ *                          bullet or digit, depending on [masked]).
+ *
+ * When [masked] is true (the default for PIN entry), the filled box
+ * renders a centered bullet ("•") instead of the actual character. This
+ * prevents shoulder-surfing — anyone glancing at the screen sees only
+ * "•••••" rather than the live PIN, while the user can still tell how
+ * many digits they've entered. The real value lives in the hidden
+ * [BasicTextField] and is submitted verbatim to [onSubmit].
  *
  * The caret uses an infinite alpha animation (1s cycle, Reverse) which feels
  * natural and matches standard OTP field UX on Material/Android.
@@ -191,7 +206,8 @@ fun PinEntryDialog(
 @Composable
 private fun RowScope.PinDigitBox(
     char: String,
-    isFocused: Boolean
+    isFocused: Boolean,
+    masked: Boolean = false
 ) {
     // Blinking caret, runs as long as the box is focused and empty.
     val transition = rememberInfiniteTransition(label = "pin-caret")
@@ -236,11 +252,14 @@ private fun RowScope.PinDigitBox(
         contentAlignment = Alignment.Center
     ) {
         if (filled) {
-            // Filled state: large, bold digit in the primary color.
+            // Filled state: when masked, render a bullet so the digit is not
+            // visible to a shoulder-surfer. The bullet is intentionally larger
+            // than a normal glyph so the box still looks "filled" without
+            // giving away which digit was entered.
             Text(
-                text = char,
-                fontSize = 24.sp,
-                lineHeight = 28.sp,
+                text = if (masked) MASKED_CHAR else char,
+                fontSize = if (masked) 32.sp else 24.sp,
+                lineHeight = if (masked) 36.sp else 28.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
                 color = onPrimary.takeIf { false } ?: primaryColor
@@ -257,3 +276,6 @@ private fun RowScope.PinDigitBox(
         // Else: leave empty (neither digit nor caret).
     }
 }
+
+/** Single source of truth for the masking glyph used in [PinDigitBox]. */
+private const val MASKED_CHAR = "•"

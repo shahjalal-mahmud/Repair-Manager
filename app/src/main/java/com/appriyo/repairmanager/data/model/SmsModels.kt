@@ -25,8 +25,10 @@ data class AppSettings(
 
 /**
  * Firestore document: smsLogs/{repairId}_{status}
- * Existence of this document is the de-duplication mechanism - if it exists,
- * that status has already been texted for that repair and must never be sent again.
+ * Existence of this document, combined with `success = true`, is the
+ * de-duplication mechanism. A failed attempt is NOT a tombstone — the
+ * retry-with-backoff mechanism in SmsLogRepository will reclaim the doc
+ * once `nextEligibleAt` has passed and `attemptCount < 6`.
  */
 data class SmsLog(
     @get:PropertyName("id") @set:PropertyName("id")
@@ -47,11 +49,26 @@ data class SmsLog(
     @get:PropertyName("sentAt") @set:PropertyName("sentAt")
     var sentAt: Date? = null,
 
+    @get:PropertyName("lastAttemptAt") @set:PropertyName("lastAttemptAt")
+    var lastAttemptAt: Date? = null,
+
     @get:PropertyName("sentByDeviceId") @set:PropertyName("sentByDeviceId")
     var sentByDeviceId: String = "",
 
     @get:PropertyName("success") @set:PropertyName("success")
-    var success: Boolean = false
+    var success: Boolean = false,
+
+    /** Times we have attempted to send this status. Max is 6 — beyond that the doc is permanent-failure. */
+    @get:PropertyName("attemptCount") @set:PropertyName("attemptCount")
+    var attemptCount: Long = 0,
+
+    /** Short error code from the SmsSentReceiver on the most recent failure (e.g. "radio_off", "no_service"). Null when last attempt succeeded. */
+    @get:PropertyName("lastError") @set:PropertyName("lastError")
+    var lastError: String? = null,
+
+    /** Earliest timestamp at which the next attempt may run. Null once `success = true`. */
+    @get:PropertyName("nextEligibleAt") @set:PropertyName("nextEligibleAt")
+    var nextEligibleAt: Date? = null
 )
 
 /**

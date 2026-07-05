@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -71,6 +73,7 @@ fun TaliKhataScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing,
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { viewModel.onAddEntryClick() },
@@ -158,24 +161,29 @@ fun TaliKhataScreen(
                 }
             }
         }
+    }
 
-        if (uiState.showAddEditDialog) {
-            TaliKhataAddEditDialog(
-                entry = uiState.entryBeingEdited,
-                isSaving = uiState.isSaving,
-                onDismiss = { viewModel.onDismissAddEditDialog() },
-                onSave = { name, phone, details, type, amount, isIncrease ->
-                    viewModel.onSaveEntry(name, phone, details, type, amount, isIncrease)
-                }
-            )
-        }
+    // ModalBottomSheet and AlertDialog must live OUTSIDE the Scaffold content
+    // lambda. They are window-level popups and crash on Android 15+ (SDK 36)
+    // when composed as children of the Scaffold's content layout, because the
+    // stricter anchor/lookahead checks in Compose BOM 2026.04.x fail under
+    // the enforced edge-to-edge insets.
+    if (uiState.showAddEditDialog) {
+        TaliKhataAddEditDialog(
+            entry = uiState.entryBeingEdited,
+            isSaving = uiState.isSaving,
+            onDismiss = { viewModel.onDismissAddEditDialog() },
+            onSave = { name, phone, details, type, amount, isIncrease ->
+                viewModel.onSaveEntry(name, phone, details, type, amount, isIncrease)
+            }
+        )
+    }
 
-        uiState.selectedEntry?.let { entry ->
-            TaliKhataDetailBottomSheet(
-                entry = entry,
-                history = uiState.history,
-                onDismiss = { viewModel.onDismissDetail() }
-            )
-        }
+    uiState.selectedEntry?.let { entry ->
+        TaliKhataDetailBottomSheet(
+            entry = entry,
+            history = uiState.history,
+            onDismiss = { viewModel.onDismissDetail() }
+        )
     }
 }

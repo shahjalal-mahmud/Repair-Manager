@@ -8,6 +8,11 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Required on Android 14+ to start a foreground service whose
+         foregroundServiceType is "dataSync". -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
     <!-- SMS feature: required on Device B only, but declared app-wide -->
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
@@ -88,6 +93,24 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- Receives the SMS_SENT callback after SmsManager hands a message
+             off to the radio. We pass PendingIntents targeting this receiver
+             from SmsSender so we can detect Android 13+ silent drops (where
+             the framework call returns normally but the radio never queues
+             the message). exported="false" because we only ever fire it via
+             our own PendingIntents. -->
+        <receiver
+            android:name=".data.sms.SmsSentReceiver"
+            android:exported="false" />
+
+        <!-- Foreground service that keeps the SMS auto-send listener alive
+             across Android 13+ background process kills. foregroundServiceType
+             "dataSync" is required on Android 14+ for SMS / sync work. -->
+        <service
+            android:name=".data.sms.SmsAutoSendService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
     <queries>
         <intent>

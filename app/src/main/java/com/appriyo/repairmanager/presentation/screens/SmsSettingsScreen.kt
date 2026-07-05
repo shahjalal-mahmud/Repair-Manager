@@ -90,7 +90,12 @@ fun SmsSettingsScreen(
                                 permissionLauncher.launch(
                                     arrayOf(
                                         Manifest.permission.SEND_SMS,
-                                        Manifest.permission.READ_PHONE_STATE
+                                        Manifest.permission.READ_PHONE_STATE,
+                                        // Android 13+ requires READ_PHONE_NUMBERS for
+                                        // SubscriptionManager.getActiveSubscriptionInfoList
+                                        // to return non-null on some OEMs. Without it
+                                        // the configured SIM slot is silently ignored.
+                                        Manifest.permission.READ_PHONE_NUMBERS
                                     )
                                 )
                             } else {

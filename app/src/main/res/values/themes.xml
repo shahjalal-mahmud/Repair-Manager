@@ -8,5 +8,15 @@
         <item name="postSplashScreenTheme">@style/Theme.RepairManager</item>
     </style>
 
-    <style name="Theme.RepairManager" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.RepairManager" parent="android:Theme.DeviceDefault.Light.NoActionBar">
+        <!-- Android 15+ enforces edge-to-edge by default for apps targeting SDK 35+.
+             These defaults tell the system whether to enforce contrast scrims
+             behind translucent status/navigation bars. Setting them explicitly
+             prevents IllegalStateException from Compose's WindowInsets lookup
+             on first composition under TaliKhataScreen's edge-to-edge layout. -->
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
 </resources>

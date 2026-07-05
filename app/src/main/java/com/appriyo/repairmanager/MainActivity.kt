@@ -18,12 +18,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.appriyo.repairmanager.data.sms.SmsAutoSendManager
 import com.appriyo.repairmanager.notifications.AlarmScheduler
 import com.appriyo.repairmanager.notifications.NotificationNavigator
 import com.appriyo.repairmanager.notifications.ReminderNotificationHelper
 import com.appriyo.repairmanager.presentation.screens.MainScreen
 import com.appriyo.repairmanager.presentation.viewmodel.MainViewModel
 import com.appriyo.repairmanager.ui.theme.RepairManagerTheme
+import org.koin.android.ext.android.get
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class MainActivity : ComponentActivity() {
@@ -61,6 +63,30 @@ class MainActivity : ComponentActivity() {
                     MainScreen(startDestination = startRoute)
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Foreground service for SMS auto-send is gated on the activity being
+        // foregrounded (Android 12+ restriction on background FGS starts).
+        try {
+            val manager: SmsAutoSendManager = get(SmsAutoSendManager::class.java)
+            manager.onAppForegrounded()
+        } catch (_: Exception) {
+            // Koin may not be ready in some edge cases; the manager's own
+            // start() in RepairManagerApp.onCreate will still re-fire when
+            // Firestore emits the next snapshot.
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        try {
+            val manager: SmsAutoSendManager = get(SmsAutoSendManager::class.java)
+            manager.onAppBackgrounded()
+        } catch (_: Exception) {
+            // Same rationale as onResume.
         }
     }
 

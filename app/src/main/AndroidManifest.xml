@@ -18,6 +18,13 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
 
+    <!-- Add Repair: save customer name + phone to the device's Contacts app
+         when the user opts in via the "Save this contact to my phonebook"
+         switch. Runtime-requested; no READ_CONTACTS is needed because we
+         never bulk-read the contacts DB - the picker returns a one-shot
+         URI grant. -->
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -137,6 +144,17 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="sms" />
+        </intent>
+        <!-- Add Repair: contact picker. Without these, on Android 11+ the OS
+             silently drops ACTION_PICK on ContactsContract mime types because
+             of package visibility. -->
+        <intent>
+            <action android:name="android.intent.action.PICK" />
+            <data android:mimeType="vnd.android.cursor.dir/phone_v2" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.PICK" />
+            <data android:mimeType="vnd.android.cursor.dir/contact" />
         </intent>
     </queries>
 

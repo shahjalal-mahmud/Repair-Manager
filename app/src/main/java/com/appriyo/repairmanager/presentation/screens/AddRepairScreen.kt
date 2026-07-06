@@ -7,6 +7,7 @@ import android.app.DatePickerDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.ContactsContract
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -169,19 +170,37 @@ fun AddRepairScreen(
         }
     }
 
-    // System contact picker launcher - returns a Uri? for the picked
-    // contact, or null if the user cancelled. No READ_CONTACTS permission
-    // is needed; the picker grants our app a one-shot URI grant.
     val pickContactLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickContact()
-    ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        val picked = ContactsHelper.queryPickedContact(context, uri)
-        if (picked == null) {
-            showNoPhoneSnackbar = true
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val uri = result.data?.data
+            val picked = uri?.let { ContactsHelper.queryPickedContact(context, it) }
+            if (picked == null) {
+                showNoPhoneSnackbar = true
+            } else {
+                customerName = picked.displayName
+                phoneNumber = picked.phoneNumber
+            }
+        }
+    }
+
+    fun launchContactPicker() {
+        val intent = Intent(Intent.ACTION_PICK).apply {
+            type = ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE
+        }
+        pickContactLauncher.launch(intent)
+    }
+
+    val readContactsPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            launchContactPicker()
         } else {
-            customerName = picked.displayName
-            phoneNumber = picked.phoneNumber
+            showNoPhoneSnackbar = false
+            // reuse or add your own snackbar state for this denial
+            showContactsDenied = true
         }
     }
 
@@ -468,7 +487,16 @@ fun AddRepairScreen(
                 // to the customer-name field) so the form reads cleanly and
                 // the button gets full visual weight.
                 OutlinedButton(
-                    onClick = { pickContactLauncher.launch(null) },
+                    onClick = {
+                        val granted = ContextCompat.checkSelfPermission(
+                            context, Manifest.permission.READ_CONTACTS
+                        ) == PackageManager.PERMISSION_GRANTED
+                        if (granted) {
+                            launchContactPicker()
+                        } else {
+                            readContactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                        }
+                    },
                     enabled = !uiState.isLoading,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()

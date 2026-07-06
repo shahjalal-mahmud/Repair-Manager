@@ -24,6 +24,7 @@
          never bulk-read the contacts DB - the picker returns a one-shot
          URI grant. -->
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission

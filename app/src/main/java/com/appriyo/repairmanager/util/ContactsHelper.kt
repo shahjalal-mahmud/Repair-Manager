@@ -38,93 +38,37 @@ object ContactsHelper {
     )
 
     /**
-     * Reads a contact URI returned by [androidx.activity.result.contract.ActivityResultContracts.PickContact]
-     * and returns the contact's display name + phone number.
+     * Reads a phone-data URI returned by an ACTION_PICK intent typed to
+     * [ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE].
      *
-     * IMPORTANT - the picker URI's shape is **not** stable across Android
-     * versions and OEM skins. Concretely, the URI handed back is usually
-     *   content://com.android.contacts/contacts/lookup/<lookupKey>/<contactId>
-     * Querying that URI directly with [ContactsContract.CommonDataKinds.Phone]
-     * columns (NUMBER, CONTACT_ID, ...) silently returns an empty cursor on
-     * AOSP Android 10+ and most OEMs - those columns simply aren't exposed
-     * through the lookup URI. That's why a naive query always returned
-     * "no phone number" even though the contact definitely has one.
-     *
-     * The reliable approach is two queries:
-     *   1. Read [ContactsContract.Contacts._ID] (and DISPLAY_NAME) from the
-     *      picker URI. The lookup URI always exposes `_ID` and `DISPLAY_NAME`.
-     *   2. With that contactId, query
-     *      [ContactsContract.CommonDataKinds.Phone.CONTENT_URI] filtered by
-     *      `CONTACT_ID = ?` to fetch the contact's actual phone numbers.
-     *
-     * Returns `null` only if both queries fail to resolve a name or a number.
+     * Unlike the generic Contacts picker, this URI IS a phone data row
+     * (content://com.android.contacts/data/<id>), so DISPLAY_NAME and NUMBER
+     * are queryable directly - no CONTACT_ID lookup, no sub-path permission
+     * assumptions. Requires READ_CONTACTS to be granted before the picker
+     * is launched.
      */
-    fun queryPickedContact(context: Context, contactUri: Uri): PickedContact? {
-        if (contactUri == Uri.EMPTY) return null
+    fun queryPickedContact(context: Context, phoneDataUri: Uri): PickedContact? {
+        if (phoneDataUri == Uri.EMPTY) return null
 
-        // ---------- 1. Resolve contactId + display name from the picker URI ----------
-        // The lookup URI reliably exposes Contacts._ID and DISPLAY_NAME even
-        // when the phone-specific columns aren't there.
-        var contactId: Long? = null
-        var displayName: String? = null
-
-        runCatching {
+        return runCatching {
             context.contentResolver.query(
-                contactUri,
+                phoneDataUri,
                 arrayOf(
-                    ContactsContract.Contacts._ID,
-                    ContactsContract.Contacts.DISPLAY_NAME
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER
                 ),
                 null, null, null
             )
         }.getOrNull()?.use { c ->
-            if (c.moveToFirst()) {
-                val idIdx = c.getColumnIndex(ContactsContract.Contacts._ID)
-                val nameIdx = c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
-                if (idIdx >= 0 && !c.isNull(idIdx)) contactId = c.getLong(idIdx)
-                if (nameIdx >= 0) displayName = c.getString(nameIdx)
-            }
+            if (!c.moveToFirst()) return null
+            val nameIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+            val numIdx = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+            val name = if (nameIdx >= 0) c.getString(nameIdx) else null
+            val number = if (numIdx >= 0) c.getString(numIdx) else null
+            if (!name.isNullOrBlank() && !number.isNullOrBlank()) {
+                PickedContact(name, number)
+            } else null
         }
-
-        // Some picker implementations don't even expose _ID reliably. As a
-        // last-ditch effort, try parsing the contactId from the URI path:
-        //   content://.../lookup/<lookupKey>/<contactId>
-        // The numeric trailing segment IS the contactId on AOSP.
-        if (contactId == null) {
-            contactUri.lastPathSegment?.toLongOrNull()?.let { contactId = it }
-        }
-
-        // ---------- 2. With the resolved contactId, query the phone table ----------
-        var phone: String? = null
-        val resolvedId = contactId
-        if (resolvedId != null) {
-            runCatching {
-                context.contentResolver.query(
-                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                    arrayOf(
-                        ContactsContract.CommonDataKinds.Phone.NUMBER,
-                        ContactsContract.CommonDataKinds.Phone.IS_SUPER_PRIMARY,
-                        ContactsContract.CommonDataKinds.Phone.IS_PRIMARY,
-                        ContactsContract.CommonDataKinds.Phone.TYPE
-                    ),
-                    "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
-                    arrayOf(resolvedId.toString()),
-                    // Prefer super-primary -> primary -> any, mobile type first.
-                    "${ContactsContract.CommonDataKinds.Phone.IS_SUPER_PRIMARY} DESC, " +
-                            "${ContactsContract.CommonDataKinds.Phone.IS_PRIMARY} DESC, " +
-                            "${ContactsContract.CommonDataKinds.Phone.TYPE} ASC"
-                )
-            }.getOrNull()?.use { pc ->
-                if (pc.moveToFirst()) {
-                    val n = pc.getString(0)
-                    if (!n.isNullOrBlank()) phone = n
-                }
-            }
-        }
-
-        val finalName = displayName?.takeIf { it.isNotBlank() } ?: return null
-        val finalPhone = phone?.takeIf { it.isNotBlank() } ?: return null
-        return PickedContact(finalName, finalPhone)
     }
 
     /**

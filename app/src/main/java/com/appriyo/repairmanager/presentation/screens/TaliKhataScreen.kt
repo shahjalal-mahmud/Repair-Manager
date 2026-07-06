@@ -12,12 +12,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -26,7 +28,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.appriyo.repairmanager.data.model.TaliKhataEntry
 import com.appriyo.repairmanager.presentation.components.talikhata.TaliKhataAddEditDialog
 import com.appriyo.repairmanager.presentation.components.talikhata.TaliKhataDetailBottomSheet
 import com.appriyo.repairmanager.presentation.components.talikhata.TaliKhataEmptyState
@@ -54,8 +55,7 @@ import org.koin.androidx.compose.koinViewModel
  */
 @Composable
 fun TaliKhataScreen(
-    viewModel: TaliKhataViewModel = koinViewModel(),
-    onSmsClick: (TaliKhataEntry) -> Unit = { viewModel.onSmsClick(it) }
+    viewModel: TaliKhataViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -86,43 +86,45 @@ fun TaliKhataScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp)
         ) {
-            Text(
-                text = "TaliKhata",
-                style = MaterialTheme.typography.headlineMedium
-            )
-            Text(
-                text = "Track money you owe and money owed to you.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
-
-            TaliKhataSummaryCards(
-                summary = uiState.summary,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
-
-            TaliKhataSearchField(
-                query = uiState.searchQuery,
-                onQueryChange = { viewModel.onSearchQueryChange(it) },
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
-            Row(
-                modifier = Modifier.padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                TaliKhataFilterChips(
-                    selected = uiState.filter,
-                    onFilterSelected = { viewModel.onFilterChange(it) },
-                    modifier = Modifier.weight(1f)
+            // Header - kept inside the screen-wide 16.dp padding.
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Text(
+                    text = "TaliKhata",
+                    style = MaterialTheme.typography.headlineMedium
                 )
-                TaliKhataSortMenu(
-                    selected = uiState.sortOption,
-                    onSortSelected = { viewModel.onSortOptionChange(it) }
+                Text(
+                    text = "Track money you owe and money owed to you.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp)
                 )
+
+                TaliKhataSummaryCards(
+                    summary = uiState.summary,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                TaliKhataSearchField(
+                    query = uiState.searchQuery,
+                    onQueryChange = { viewModel.onSearchQueryChange(it) },
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Row(
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TaliKhataFilterChips(
+                        selected = uiState.filter,
+                        onFilterSelected = { viewModel.onFilterChange(it) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TaliKhataSortMenu(
+                        selected = uiState.sortOption,
+                        onSortSelected = { viewModel.onSortOptionChange(it) }
+                    )
+                }
             }
 
             when {
@@ -139,12 +141,15 @@ fun TaliKhataScreen(
                     TaliKhataEmptyState(modifier = Modifier.fillMaxSize())
                 }
                 else -> {
+                    // No horizontal contentPadding here - the parent already
+                    // gives the list 16.dp on each side. Previously the list
+                    // added 16.dp AGAIN, so cards were indented 32.dp from
+                    // the screen edges.
                     LazyColumn(
+                        modifier = Modifier.padding(horizontal = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(
-                            start = 16.dp,
                             top = 8.dp,
-                            end = 16.dp,
                             bottom = 96.dp
                         )
                     ) {
@@ -152,7 +157,7 @@ fun TaliKhataScreen(
                             TaliKhataEntryCard(
                                 entry = entry,
                                 onClick = { viewModel.onEntryClick(entry) },
-                                onSmsClick = { onSmsClick(entry) },
+                                onSmsClick = { viewModel.onSmsClick(entry) },
                                 onEditClick = { viewModel.onEditEntryClick(entry) },
                                 onDeleteClick = { viewModel.onDeleteEntryClick(entry) }
                             )
@@ -179,11 +184,44 @@ fun TaliKhataScreen(
         )
     }
 
-    uiState.selectedEntry?.let { entry ->
+    // Use liveSelectedEntry so the sheet picks up balance updates from the
+    // realtime Firestore listener. If the entry was deleted out from under us,
+    // the sheet just dismisses itself.
+    val liveEntry = uiState.liveSelectedEntry
+    val selectedId = uiState.selectedEntryId
+    LaunchedEffect(selectedId, liveEntry?.id) {
+        if (selectedId != null && liveEntry == null) {
+            viewModel.onDismissDetail()
+        }
+    }
+    if (selectedId != null && liveEntry != null) {
         TaliKhataDetailBottomSheet(
-            entry = entry,
+            entry = liveEntry,
             history = uiState.history,
             onDismiss = { viewModel.onDismissDetail() }
+        )
+    }
+
+    uiState.pendingDeleteEntry?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { viewModel.onCancelDelete() },
+            title = { Text("Delete entry?") },
+            text = {
+                Text(
+                    "This will permanently remove ${entry.personName} and all of " +
+                            "their history. This cannot be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.onConfirmDelete() }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.onCancelDelete() }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }

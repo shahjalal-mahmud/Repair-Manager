@@ -34,6 +34,14 @@ import java.util.Locale
 /**
  * A single ledger entry row shown in the TaliKhata list.
  * All actions are delegated via callbacks - no business logic here.
+ *
+ * IMPORTANT: the "open detail" tap area is the *body* of the card
+ * (everything except the action row). Previously the whole Card was
+ * wrapped in `Modifier.clickable`, which competed with the IconButtons
+ * inside and caused the SMS/Edit/Delete taps to sometimes open the
+ * detail sheet instead of firing their callback (and vice versa on
+ * some Compose BOM versions, where the outer clickable swallowed the
+ * inner IconButton click entirely).
  */
 @Composable
 fun TaliKhataEntryCard(
@@ -45,55 +53,62 @@ fun TaliKhataEntryCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Body - the clickable "open detail" area. Putting the clickable
+            // on a Column instead of the whole Card means the IconButtons in
+            // the action row get the click first and won't trigger detail.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onClick)
             ) {
-                TypeBadge(type = entry.typeEnum)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TypeBadge(type = entry.typeEnum)
+                    Text(
+                        text = formatCurrency(entry.balance),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
                 Text(
-                    text = formatCurrency(entry.balance),
+                    text = entry.personName,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    modifier = Modifier.padding(top = 8.dp)
                 )
-            }
 
-            Text(
-                text = entry.personName,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(top = 8.dp)
-            )
+                if (entry.phoneNumber.isNotBlank()) {
+                    Text(
+                        text = entry.phoneNumber,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
-            if (entry.phoneNumber.isNotBlank()) {
-                Text(
-                    text = entry.phoneNumber,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+                if (entry.details.isNotBlank()) {
+                    Text(
+                        text = entry.details,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
 
-            if (entry.details.isNotBlank()) {
-                Text(
-                    text = entry.details,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-
-            entry.createdAt?.let { date ->
-                Text(
-                    text = "Created ${formatDate(date.time)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+                entry.createdAt?.let { date ->
+                    Text(
+                        text = "Created ${formatDate(date.time)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
 
             Row(
@@ -102,7 +117,13 @@ fun TaliKhataEntryCard(
                     .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.End
             ) {
-                IconButton(onClick = onSmsClick) {
+                // Disable SMS when no phone number is on file - opening
+                // ACTION_SENDTO with an empty phone number silently fails on
+                // modern Android (the SMS app opens blank, no recipient).
+                IconButton(
+                    onClick = onSmsClick,
+                    enabled = entry.phoneNumber.isNotBlank()
+                ) {
                     Icon(Icons.Default.Sms, contentDescription = "SMS")
                 }
                 IconButton(onClick = onEditClick) {

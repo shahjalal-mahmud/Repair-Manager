@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.appriyo.repairmanager.presentation.viewmodel.TaliKhataSummary
@@ -40,9 +41,19 @@ fun TaliKhataSummaryCards(
             amount = summary.totalTheyOweYou,
             modifier = Modifier.weight(1f)
         )
+        // Net balance is color-coded: green when you're owed, red when you
+        // owe, neutral when exactly zero. Avoids the user having to do the
+        // mental arithmetic from a single negative number.
+        val net = summary.netBalance
+        val netColor = when {
+            net > 0.0 -> MaterialTheme.colorScheme.tertiary   // in your favour
+            net < 0.0 -> MaterialTheme.colorScheme.error      // you owe net
+            else -> Color.Unspecified
+        }
         SummaryCard(
             title = "Net Balance",
-            amount = summary.netBalance,
+            amount = net,
+            amountColor = netColor,
             modifier = Modifier.weight(1f)
         )
     }
@@ -52,7 +63,8 @@ fun TaliKhataSummaryCards(
 private fun SummaryCard(
     title: String,
     amount: Double,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    amountColor: Color = Color.Unspecified
 ) {
     Card(
         modifier = modifier,
@@ -71,7 +83,9 @@ private fun SummaryCard(
                 text = formatCurrency(amount),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = if (amountColor == Color.Unspecified)
+                    MaterialTheme.colorScheme.onSurface
+                else amountColor
             )
         }
     }

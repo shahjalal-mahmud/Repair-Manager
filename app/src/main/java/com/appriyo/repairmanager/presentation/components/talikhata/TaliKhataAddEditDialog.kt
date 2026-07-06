@@ -59,7 +59,12 @@ fun TaliKhataAddEditDialog(
     var isIncrease by remember { mutableStateOf(true) }
 
     val currentBalance = entry?.balance ?: 0.0
-    val amount = amountText.toDoubleOrNull() ?: 0.0
+    // Treat a blank/empty field as 0 for the "no adjustment" case, but block
+    // typing actual garbage like "abc" or "1.2.3" from being silently coerced
+    // to 0.0 - that previously let users "save" adjustments they never made.
+    val parsedAmount = amountText.toDoubleOrNull()
+    val amount = parsedAmount ?: 0.0
+    val hasInvalidAmountText = amountText.isNotBlank() && parsedAmount == null
     val newBalance = if (isEditing) {
         if (isIncrease) currentBalance + amount else currentBalance - amount
     } else {
@@ -67,9 +72,15 @@ fun TaliKhataAddEditDialog(
     }
     val hasNegativeError = isEditing && !isIncrease && newBalance < 0.0
 
+    // For new entries the initial amount must be a non-negative number; for
+    // edits the adjustment may be left blank (meaning "no balance change").
+    val newEntryRequiresValidAmount = !isEditing && (parsedAmount == null || amount < 0.0)
+
     val canSave = personName.isNotBlank() &&
-            (!isEditing || amountText.isBlank() || !hasNegativeError) &&
-            !isSaving
+            !isSaving &&
+            !hasInvalidAmountText &&
+            !hasNegativeError &&
+            !newEntryRequiresValidAmount
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -127,6 +138,10 @@ fun TaliKhataAddEditDialog(
                         label = { Text("Amount") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        isError = hasInvalidAmountText,
+                        supportingText = if (hasInvalidAmountText) {
+                            { Text("Enter a valid number") }
+                        } else null,
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -159,9 +174,18 @@ fun TaliKhataAddEditDialog(
                     OutlinedTextField(
                         value = amountText,
                         onValueChange = { amountText = it },
-                        label = { Text("Amount") },
+                        label = { Text("Initial Amount") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        isError = hasInvalidAmountText || newEntryRequiresValidAmount,
+                        supportingText = {
+                            val msg = when {
+                                hasInvalidAmountText -> "Enter a valid number"
+                                newEntryRequiresValidAmount -> "Initial amount is required"
+                                else -> "Amount owed / owing to start this entry with"
+                            }
+                            Text(msg)
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }

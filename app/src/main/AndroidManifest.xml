@@ -119,6 +119,25 @@
         <intent>
             <action android:name="android.media.action.VIDEO_CAPTURE" />
         </intent>
+        <!-- Required on Android 11+ so that resolveActivity() / startActivity()
+             can see SMS apps when we launch ACTION_SENDTO with an "sms:" URI.
+             Without this, the OS silently drops the intent (no Toast, no
+             crash, just nothing happens) because of package visibility. -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="sms" />
+        </intent>
+        <!-- MmsTo/smsto is the legacy scheme some apps still register; include
+             it too so the resolver finds the user's preferred SMS handler. -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+        <!-- ACTION_VIEW with sms: is what some launchers / shortcuts use. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="sms" />
+        </intent>
     </queries>
 
 </manifest>

@@ -1,8 +1,13 @@
 // app/src/main/java/com/appriyo/repairmanager/presentation/screens/AddRepairScreen.kt
 package com.appriyo.repairmanager.presentation.screens
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.DatePickerDialog
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ContactPhone
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Payments
@@ -38,13 +44,17 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -65,6 +75,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
 import com.appriyo.repairmanager.data.media.MediaAttachment
 import com.appriyo.repairmanager.data.media.MediaType
@@ -72,6 +83,7 @@ import com.appriyo.repairmanager.data.model.SecurityType
 import com.appriyo.repairmanager.presentation.components.OptionDropdown
 import com.appriyo.repairmanager.presentation.components.SectionCard
 import com.appriyo.repairmanager.presentation.viewmodel.AddRepairViewModel
+import com.appriyo.repairmanager.util.ContactsHelper
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import java.util.Calendar
@@ -101,6 +113,13 @@ fun AddRepairScreen(
     var paymentInfo by remember { mutableStateOf("") }
     var additionalDetails by remember { mutableStateOf("") }
     var boxNumber by remember { mutableStateOf("") }
+
+    // Phonebook feature - local UI state only. The actual contact storage
+    // happens in the device's Contacts app via ContactsHelper; nothing in
+    // these booleans is persisted to Firestore.
+    var saveContactToPhonebook by remember { mutableStateOf(false) }
+    var showContactsDenied by remember { mutableStateOf(false) }
+    var showNoPhoneSnackbar by remember { mutableStateOf(false) }
 
     var securityType by remember { mutableStateOf(SecurityType.NONE) }
     var password by remember { mutableStateOf("") }
@@ -133,6 +152,38 @@ fun AddRepairScreen(
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { /* user can retry Save & Print regardless of result */ }
+
+    // WRITE_CONTACTS permission launcher - drives the
+    // "Save this contact to my phonebook" Switch. We do NOT optimistically
+    // flip `saveContactToPhonebook` to true on toggle; we wait for the
+    // granted callback so the visual state stays accurate if the user
+    // dismissed the dialog.
+    val contactsPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            saveContactToPhonebook = true
+        } else {
+            saveContactToPhonebook = false
+            showContactsDenied = true
+        }
+    }
+
+    // System contact picker launcher - returns a Uri? for the picked
+    // contact, or null if the user cancelled. No READ_CONTACTS permission
+    // is needed; the picker grants our app a one-shot URI grant.
+    val pickContactLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickContact()
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val picked = ContactsHelper.queryPickedContact(context, uri)
+        if (picked == null) {
+            showNoPhoneSnackbar = true
+        } else {
+            customerName = picked.displayName
+            phoneNumber = picked.phoneNumber
+        }
+    }
 
     val mediaAttachmentsSaver = listSaver<List<MediaAttachment>, String>(
         save = { list -> list.flatMap { listOf(it.uri.toString(), it.type.name) } },
@@ -183,8 +234,73 @@ fun AddRepairScreen(
                 "Repair saved successfully! Serial: $serial"
             }
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+
+            // Phonebook side-effect: if the user opted in via the
+            // "Save this contact to my phonebook" switch, persist the typed
+            // name+number to the device's Contacts app now. This runs in
+            // the screen's coroutineScope (not the ViewModel) so the VM
+            // stays Firestore-only.
+            //
+            // Capture the values BEFORE clearFields() - clearFields() resets
+            // customerName / phoneNumber to "" and would erase them.
+            if (saveContactToPhonebook) {
+                val nameToSave = customerName
+                val phoneToSave = phoneNumber
+                if (nameToSave.isNotBlank() && phoneToSave.isNotBlank()) {
+                    coroutineScope.launch {
+                        val ok = ContactsHelper.saveToPhonebook(
+                            context = context,
+                            displayName = nameToSave,
+                            phoneNumber = phoneToSave
+                        )
+                        val msg = if (ok) {
+                            "Contact saved to phonebook."
+                        } else {
+                            "Couldn't save contact to phonebook."
+                        }
+                        snackbarHostState.showSnackbar(msg)
+                    }
+                } else {
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(
+                            "Add customer name and phone to save to phonebook."
+                        )
+                    }
+                }
+            }
+
             clearFields()
             viewModel.consumeOneTimeEvents()
+        }
+    }
+
+    // WRAP_CONTACTS denied (incl. "don't ask again") - offer a "Settings"
+    // action that opens the app-info page so the user can flip the grant on.
+    LaunchedEffect(showContactsDenied) {
+        if (showContactsDenied) {
+            val result = snackbarHostState.showSnackbar(
+                message = "Contacts permission denied - open Settings to grant it.",
+                actionLabel = "Settings",
+                duration = SnackbarDuration.Long
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                context.startActivity(
+                    Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", context.packageName, null)
+                    ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                )
+            }
+            showContactsDenied = false
+        }
+    }
+
+    // Picked contact had no usable phone number - tell the user but leave
+    // the existing Customer Name / Phone fields untouched.
+    LaunchedEffect(showNoPhoneSnackbar) {
+        if (showNoPhoneSnackbar) {
+            snackbarHostState.showSnackbar("That contact has no phone number.")
+            showNoPhoneSnackbar = false
         }
     }
 
@@ -332,7 +448,7 @@ fun AddRepairScreen(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading
                 )
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = phoneNumber,
                     onValueChange = { phoneNumber = it },
@@ -345,6 +461,78 @@ fun AddRepairScreen(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading
                 )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Phonebook picker button - sits on its OWN line (not next
+                // to the customer-name field) so the form reads cleanly and
+                // the button gets full visual weight.
+                OutlinedButton(
+                    onClick = { pickContactLauncher.launch(null) },
+                    enabled = !uiState.isLoading,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.ContactPhone,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Pick customer from phonebook")
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // HorizontalDivider separates the input fields above from
+                // the save-to-phonebook preference below.
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Save to phonebook",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Add this customer to your device contacts when saving the repair.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = saveContactToPhonebook,
+                        enabled = !uiState.isLoading,
+                        onCheckedChange = { wantOn ->
+                            if (!wantOn) {
+                                saveContactToPhonebook = false
+                                return@Switch
+                            }
+                            // Short-circuit if already granted (e.g. after
+                            // a process restart where local state resets to
+                            // OFF but the OS-level grant persists).
+                            val granted = ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.WRITE_CONTACTS
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (granted) {
+                                saveContactToPhonebook = true
+                            } else {
+                                contactsPermissionLauncher.launch(
+                                    Manifest.permission.WRITE_CONTACTS
+                                )
+                            }
+                        }
+                    )
+                }
             }
 
             SectionCard(title = "Device & Issue", icon = Icons.Filled.Smartphone) {

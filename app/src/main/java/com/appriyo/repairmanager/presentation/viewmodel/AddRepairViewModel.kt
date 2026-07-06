@@ -228,9 +228,7 @@ class AddRepairViewModel(
         val errors = mutableMapOf<String, String>()
         if (customerName.isBlank()) errors["customerName"] = "Customer name is required."
         val trimmedPhone = phoneNumber.trim()
-        if (trimmedPhone.isBlank()) {
-            errors["phoneNumber"] = "Phone number is required."
-        } else if (!trimmedPhone.matches(Regex("^\\d{11}$"))) {
+        if (trimmedPhone.isNotBlank() && !trimmedPhone.matches(Regex("^\\d{11}$"))) {
             errors["phoneNumber"] = "Phone number must be exactly 11 digits."
         }
         return errors

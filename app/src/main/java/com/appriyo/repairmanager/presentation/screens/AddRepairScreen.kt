@@ -336,7 +336,7 @@ fun AddRepairScreen(
                 OutlinedTextField(
                     value = phoneNumber,
                     onValueChange = { phoneNumber = it },
-                    label = { Text("Phone Number * (11 digits)") },
+                    label = { Text("Phone Number (11 digits, optional)") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     isError = uiState.fieldErrors.containsKey("phoneNumber"),

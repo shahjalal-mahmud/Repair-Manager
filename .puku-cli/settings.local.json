@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(./gradlew --offline :app:compileDebugKotlin --no-daemon)",
+      "Bash(./gradlew --offline :app:assembleDebug --no-daemon)",
+      "Bash(grep:*)",
+      "Bash(find app/src/main -newer app/proguard-rules.pro -name *.kt -o -name *.xml)",
+      "Bash(./gradlew compileDebugKotlin --no-daemon)"
+    ]
+  }
+}

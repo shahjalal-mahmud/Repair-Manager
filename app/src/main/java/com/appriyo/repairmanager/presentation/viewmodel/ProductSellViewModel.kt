@@ -22,6 +22,14 @@ import kotlinx.coroutines.launch
  * In addition, it owns the live product sell list and a free-text search
  * query so the screen can offer a single page that combines "create new
  * invoice" and "browse past invoices".
+ *
+ * **Validation note:** [productPrice], [paymentAmount], and
+ * [warrantyMonths] are free text (see [com.appriyo.repairmanager.data.model.ProductSell]).
+ * This screen only produces a printed invoice, so we deliberately do NOT
+ * parse them as numbers or compare them to each other - we only require
+ * that the fields marked with * are not left empty. A shopkeeper can type
+ * digits, Bangla digits, or words like "Free" / "Negotiable" and it will
+ * save and print exactly as typed.
  */
 class ProductSellViewModel(
     private val productSellRepository: ProductSellRepository,
@@ -114,7 +122,7 @@ class ProductSellViewModel(
             _uiState.update {
                 it.copy(
                     fieldErrors = errors,
-                    errorMessage = "Please fix the highlighted fields before saving.",
+                    errorMessage = "Please fill in the highlighted fields before saving.",
                     isSuccess = false
                 )
             }
@@ -144,9 +152,9 @@ class ProductSellViewModel(
 
             val result = productSellRepository.createProductSell(
                 productName = productName.trim(),
-                productPrice = productPrice.toDouble(),
-                paymentAmount = paymentAmount.toDouble(),
-                warrantyMonths = warrantyMonths.toIntOrNull() ?: 0,
+                productPrice = productPrice.trim(),
+                paymentAmount = paymentAmount.trim(),
+                warrantyMonths = warrantyMonths.trim(),
                 warrantyStartDate = warrantyStartDate.trim(),
                 productSerial = productSerial.trim(),
                 warrantyDetails = warrantyDetails.trim(),
@@ -210,6 +218,13 @@ class ProductSellViewModel(
 
     // ── Validation ────────────────────────────────────────────────────────
 
+    /**
+     * Only checks that the required (*) fields were not left empty.
+     * Deliberately does NOT parse productPrice / paymentAmount as numbers
+     * and does NOT compare them to each other - they are free text used
+     * purely to print an invoice, and can be entered in any language or
+     * even as words (e.g. "Free", "Negotiable").
+     */
     private fun validateFields(
         productName: String,
         productPrice: String,
@@ -219,15 +234,11 @@ class ProductSellViewModel(
         if (productName.isBlank()) {
             errors["productName"] = "Product name is required."
         }
-        val price = productPrice.toDoubleOrNull()
-        if (price == null || price < 0.0) {
-            errors["productPrice"] = "Enter a valid price."
+        if (productPrice.isBlank()) {
+            errors["productPrice"] = "Product price is required."
         }
-        val paid = paymentAmount.toDoubleOrNull()
-        if (paid == null || paid < 0.0) {
-            errors["paymentAmount"] = "Enter a valid payment amount."
-        } else if (price != null && paid > price + 0.0001) {
-            errors["paymentAmount"] = "Payment cannot exceed the product price."
+        if (paymentAmount.isBlank()) {
+            errors["paymentAmount"] = "Payment amount is required."
         }
         return errors
     }

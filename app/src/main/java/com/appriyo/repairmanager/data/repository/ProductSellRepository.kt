@@ -4,6 +4,8 @@ package com.appriyo.repairmanager.data.repository
 import com.appriyo.repairmanager.data.model.ProductSell
 import com.appriyo.repairmanager.data.model.ProductSellFirestorePaths
 import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
@@ -13,19 +15,23 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import java.util.Date
 import java.util.Locale
 
 /**
  * Repository for managing product sell / invoice records in Firestore.
  *
- * **Data isolation:** All collections live under users/{uid}, just like the
- * repair / notes / cashbox repositories, so each Google account only ever
- * reads/writes its own data while multiple devices on the same account
- * continue to share and sync the same underlying documents.
+ * **Data isolation:** All collections live under users/{uid}, just like
+ * the repair / notes / cashbox repositories, so each Google account only
+ * ever reads/writes its own data while multiple devices on the same
+ * account continue to share and sync the same underlying documents.
  *
  * **Key features:**
  * - Transactional serial number generation (prevents duplicate invoice IDs)
  * - Real-time sync across devices via Flow APIs
+ * - Price / payment / warranty are stored as free text (see [ProductSell])
+ *   since this feature only needs to produce a printed invoice, not do
+ *   numeric accounting.
  *
  * @author RepairManager Team
  * @since 1.5.0
@@ -53,12 +59,15 @@ class ProductSellRepository(
      * serial number in a single Firestore transaction. This guarantees
      * consistent serial numbers even with concurrent writes from multiple
      * devices signed into the same account.
+     *
+     * [productPrice], [paymentAmount], and [warrantyMonths] are stored
+     * exactly as typed (free text) - no numeric parsing is performed.
      */
     suspend fun createProductSell(
         productName: String,
-        productPrice: Double,
-        paymentAmount: Double,
-        warrantyMonths: Int,
+        productPrice: String,
+        paymentAmount: String,
+        warrantyMonths: String,
         warrantyStartDate: String,
         productSerial: String,
         warrantyDetails: String,
@@ -84,9 +93,9 @@ class ProductSellRepository(
                 "id" to newDocRef.id,
                 "serialNumber" to formattedSerial,
                 "productName" to productName.trim(),
-                "productPrice" to productPrice,
-                "paymentAmount" to paymentAmount,
-                "warrantyMonths" to warrantyMonths,
+                "productPrice" to productPrice.trim(),
+                "paymentAmount" to paymentAmount.trim(),
+                "warrantyMonths" to warrantyMonths.trim(),
                 "warrantyStartDate" to warrantyStartDate.trim(),
                 "productSerial" to productSerial.trim(),
                 "warrantyDetails" to warrantyDetails.trim(),
@@ -103,9 +112,9 @@ class ProductSellRepository(
             id = newDocRef.id,
             serialNumber = generatedSerial,
             productName = productName.trim(),
-            productPrice = productPrice,
-            paymentAmount = paymentAmount,
-            warrantyMonths = warrantyMonths,
+            productPrice = productPrice.trim(),
+            paymentAmount = paymentAmount.trim(),
+            warrantyMonths = warrantyMonths.trim(),
             warrantyStartDate = warrantyStartDate.trim(),
             productSerial = productSerial.trim(),
             warrantyDetails = warrantyDetails.trim(),
@@ -136,7 +145,7 @@ class ProductSellRepository(
     /** One-time fetch of all product sells (used for export/backups). */
     suspend fun getAllProductSellsOnce(): Result<List<ProductSell>> = runCatching {
         val snapshot = productSellsCollection.get().await()
-        snapshot.documents.mapNotNull { it.toObject(ProductSell::class.java) }
+        snapshot.documents.mapNotNull { it.toProductSellOrNull() }
     }.fold(
         onSuccess = { Result.success(it) },
         onFailure = { handleException(it) }
@@ -159,7 +168,7 @@ class ProductSellRepository(
                         return@addSnapshotListener
                     }
                     val items = snapshot?.documents
-                        ?.mapNotNull { it.toObject(ProductSell::class.java) }
+                        ?.mapNotNull { it.toProductSellOrNull() }
                         ?: emptyList()
                     trySend(items)
                 }
@@ -216,4 +225,66 @@ class ProductSellRepository(
             }
         }
     }
+}
+
+/**
+ * Manual [ProductSell] mapper for a [DocumentSnapshot].
+ *
+ * Replaces Firestore's reflection-based `toObject(ProductSell::class.java)`,
+ * which used to crash when an older document had `productPrice`,
+ * `paymentAmount`, or `warrantyMonths` stored as numeric values (Long /
+ * Double) — Firestore's mapper auto-coerces Long → Int / Long → Double /
+ * Double → Int / etc., but it does **not** coerce Long → String and throws
+ * `Failed to convert value of type java.lang.Long to String` instead.
+ *
+ * Since those three fields are now free-text on the model anyway
+ * (see [ProductSell] docs), the safest fix is to read each field manually
+ * and coerce any numeric / timestamp-shaped value into a display string.
+ * Old numeric Firestore values and new string values are both handled, so
+ * no data migration is required and no crash occurs on mixed collections.
+ *
+ * Other fields (id, serialNumber, productName, dates, optional
+ * serial/details/notes) keep their original types and are read via plain
+ * `getString(...)` — a single missing/mismatched field for those would only
+ * produce `null`/empty defaults, never a crash.
+ */
+private fun DocumentSnapshot.toProductSellOrNull(): ProductSell? {
+    // Use the document id as a fallback - even if every other field read
+    // returns null we want this snapshot to surface as an empty entry
+    // rather than silently dropping it.
+    val fallbackId = id
+
+    fun asFlexibleText(value: Any?): String = when (value) {
+        null -> ""
+        is String -> value
+        is Number -> value.toString()
+        is Boolean -> value.toString()
+        // Firestore Timestamps do come back as Timestamp when the field is
+        // `@ServerTimestamp` or typed as Timestamp server-side, but a defensive
+        // toString() keeps us safe against any other odd shape (e.g. Date).
+        is Timestamp -> value.toDate().time.let { Date(it).toString() }
+        else -> value.toString()
+    }
+
+    return ProductSell(
+        id = getString("id") ?: fallbackId,
+        serialNumber = getString("serialNumber").orEmpty(),
+        productName = getString("productName").orEmpty(),
+        productPrice = asFlexibleText(get("productPrice")),
+        paymentAmount = asFlexibleText(get("paymentAmount")),
+        warrantyMonths = asFlexibleText(get("warrantyMonths")),
+        warrantyStartDate = getString("warrantyStartDate").orEmpty(),
+        productSerial = getString("productSerial").orEmpty(),
+        warrantyDetails = getString("warrantyDetails").orEmpty(),
+        notes = getString("notes").orEmpty(),
+        // createdAt can be null (newly created doc, server timestamp pending),
+        // a Timestamp, or, after manual edits in the console, sometimes a
+        // String - handle all three without throwing.
+        createdAt = when (val raw = get("createdAt")) {
+            is Timestamp -> raw.toDate()
+            is Date -> raw
+            else -> null
+        },
+        createdBy = getString("createdBy").orEmpty()
+    )
 }

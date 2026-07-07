@@ -85,6 +85,14 @@ import java.util.Locale
  *  4. A scrollable list of all saved sales as cards, each with its own
  *     "Print with POS" button that re-prints the existing invoice.
  *
+ * **Free text everywhere:** Product price, payment amount, and warranty
+ * months are NOT restricted to digits. The keyboard is hinted to numeric
+ * (via [KeyboardType.Decimal] / [KeyboardType.Number]) purely as a
+ * convenience so most users get a number pad by default, but nothing
+ * filters or blocks what actually gets typed - Bangla digits, English
+ * digits, or plain words like "Free" all pass straight through, since
+ * this feature only needs to produce a printed invoice.
+ *
  * Add Repair is intentionally kept exactly as it was - this screen only
  * adds a new feature.
  */
@@ -229,7 +237,7 @@ fun ProductSellListScreen(
                     paymentAmount = paymentAmount,
                     onPaymentAmountChange = { paymentAmount = it },
                     warrantyMonths = warrantyMonths,
-                    onWarrantyMonthsChange = { warrantyMonths = it.filter(Char::isDigit).take(3) },
+                    onWarrantyMonthsChange = { warrantyMonths = it },
                     warrantyStartDate = warrantyStartDate,
                     onWarrantyStartDateClick = { datePickerDialog.show() },
                     productSerial = productSerial,
@@ -356,9 +364,11 @@ private fun NewSaleCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // Free text: keyboard hints numeric/decimal for convenience,
+                // but any input (digits in any language, or words) is allowed.
                 OutlinedTextField(
                     value = productPrice,
-                    onValueChange = { onProductPriceChange(it.filter { c -> c.isDigit() || c == '.' }) },
+                    onValueChange = onProductPriceChange,
                     label = { Text("Product Price *") },
                     placeholder = { Text("BDT") },
                     singleLine = true,
@@ -371,7 +381,7 @@ private fun NewSaleCard(
                 )
                 OutlinedTextField(
                     value = paymentAmount,
-                    onValueChange = { onPaymentAmountChange(it.filter { c -> c.isDigit() || c == '.' }) },
+                    onValueChange = onPaymentAmountChange,
                     label = { Text("Payment Amount *") },
                     placeholder = { Text("BDT") },
                     singleLine = true,
@@ -398,6 +408,8 @@ private fun NewSaleCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // Free text: keyboard hints numeric for convenience, but any
+                // input (digits in any language, or words) is allowed.
                 OutlinedTextField(
                     value = warrantyMonths,
                     onValueChange = onWarrantyMonthsChange,
@@ -567,14 +579,16 @@ private fun ProductSellCard(
                     modifier = Modifier.size(15.dp)
                 )
                 Spacer(Modifier.width(6.dp))
+                // productPrice / paymentAmount are free text - shown exactly
+                // as the shopkeeper typed them, no numeric formatting applied.
                 Text(
-                    text = "Price Taka ${formatMoney(sell.productPrice)}   •   Paid Taka ${formatMoney(sell.paymentAmount)}",
+                    text = "Price ${sell.productPrice}   •   Paid ${sell.paymentAmount}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            if (sell.warrantyMonths > 0) {
+            if (sell.warrantyMonths.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
@@ -585,9 +599,9 @@ private fun ProductSellCard(
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = "Warranty: ${sell.warrantyMonths} month(s)" +
-                            if (sell.warrantyStartDate.isNotBlank())
-                                "  (from ${sell.warrantyStartDate})" else "",
+                        text = "Warranty: ${sell.warrantyMonths}" +
+                                if (sell.warrantyStartDate.isNotBlank())
+                                    "  (from ${sell.warrantyStartDate})" else "",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -661,7 +675,6 @@ private fun EmptySalesState(isSearching: Boolean) {
 // =============================================================================
 
 private val DATE_TIME_FORMATTER = SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale.US)
-private val MONEY_FORMAT = Locale.US
 
 private fun todayFormatted(): String {
     val cal = Calendar.getInstance()
@@ -677,18 +690,14 @@ private fun formatDateTime(date: Date?): String {
     return date?.let { DATE_TIME_FORMATTER.format(it) } ?: "-"
 }
 
-private fun formatMoney(value: Double): String {
-    return String.format(MONEY_FORMAT, "%.2f", value)
-}
-
 private fun filterSales(sales: List<ProductSell>, query: String): List<ProductSell> {
     val trimmed = query.trim()
     if (trimmed.isEmpty()) return sales
     val needle = trimmed.lowercase(Locale.US)
     return sales.filter { sell ->
         sell.productName.lowercase(Locale.US).contains(needle) ||
-            sell.serialNumber.lowercase(Locale.US).contains(needle) ||
-            sell.productSerial.lowercase(Locale.US).contains(needle) ||
-            sell.notes.lowercase(Locale.US).contains(needle)
+                sell.serialNumber.lowercase(Locale.US).contains(needle) ||
+                sell.productSerial.lowercase(Locale.US).contains(needle) ||
+                sell.notes.lowercase(Locale.US).contains(needle)
     }
 }

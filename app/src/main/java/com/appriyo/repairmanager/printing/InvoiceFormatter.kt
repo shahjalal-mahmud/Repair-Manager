@@ -167,8 +167,27 @@ object InvoiceFormatter {
             SimpleDateFormat("hh:mm a", Locale.US).format(it)
         } ?: "-"
         val warrantyStart = sell.warrantyStartDate.ifBlank { sellDate }
-        val warrantyExpiry = computeWarrantyExpiry(warrantyStart, sell.warrantyMonths)
-        val balanceDue = (sell.productPrice - sell.paymentAmount).coerceAtLeast(0.0)
+
+        // productPrice / paymentAmount / warrantyMonths are free text (the
+        // shopkeeper may type digits, Bangla digits, or words like "Free").
+        // We always print them exactly as typed, and only attempt the
+        // numeric extras below (Due amount, computed warranty expiry) when
+        // they happen to parse cleanly as plain numbers - never block or
+        // crash on non-numeric input.
+        val parsedPrice = sell.productPrice.trim().toDoubleOrNull()
+        val parsedPaid = sell.paymentAmount.trim().toDoubleOrNull()
+        val balanceDue = if (parsedPrice != null && parsedPaid != null) {
+            (parsedPrice - parsedPaid).coerceAtLeast(0.0)
+        } else {
+            null
+        }
+
+        val warrantyMonthsNumber = sell.warrantyMonths.trim().toIntOrNull()
+        val warrantyExpiry = if (warrantyMonthsNumber != null && warrantyMonthsNumber > 0) {
+            computeWarrantyExpiry(warrantyStart, warrantyMonthsNumber)
+        } else {
+            null
+        }
 
         return buildString {
             // --- Store Header ---
@@ -192,19 +211,21 @@ object InvoiceFormatter {
 
             // --- Pricing ---
             appendLine("PRICING")
-            appendLine("Price   : Taka ${formatMoney(sell.productPrice)}")
-            appendLine("Paid    : Taka ${formatMoney(sell.paymentAmount)}")
-            if (balanceDue > 0.0) {
+            appendLine("Price   : Taka ${sell.productPrice.trim().ifBlank { "-" }.take(20)}")
+            appendLine("Paid    : Taka ${sell.paymentAmount.trim().ifBlank { "-" }.take(20)}")
+            if (balanceDue != null && balanceDue > 0.0) {
                 appendLine("Due     : Taka ${formatMoney(balanceDue)}")
             }
             appendLine(LINE_SEPARATOR)
 
             // --- Warranty Information ---
             appendLine("WARRANTY")
-            if (sell.warrantyMonths > 0) {
-                appendLine("Period  : ${sell.warrantyMonths} Month(s)")
+            if (sell.warrantyMonths.isNotBlank()) {
+                appendLine("Period  : ${sell.warrantyMonths.trim().take(16)} Month(s)")
                 appendLine("From    : ${warrantyStart.take(16)}")
-                appendLine("Until   : ${warrantyExpiry.take(16)}")
+                if (warrantyExpiry != null) {
+                    appendLine("Until   : ${warrantyExpiry.take(16)}")
+                }
             } else {
                 appendLine("Period  : No Warranty")
             }
@@ -255,7 +276,7 @@ object InvoiceFormatter {
             val month = parts[1].trim().toInt()
             val year = parts[2].trim().toInt()
             val cal = Calendar.getInstance().apply {
-                setLenient(false)
+                isLenient = false
                 clear()
                 set(year, month - 1, day)
                 add(Calendar.MONTH, months)

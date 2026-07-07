@@ -12,6 +12,13 @@ import java.util.Date
  * (with optional warranty) to a customer. The same record backs the
  * printable POS invoice.
  *
+ * **Free-text money / warranty fields:** [productPrice], [paymentAmount],
+ * and [warrantyMonths] are intentionally plain [String] fields, not
+ * numbers. This screen is only used to produce a printed invoice, so the
+ * shopkeeper can type whatever they want in these fields - digits, Bangla
+ * digits, words like "Free" or "Negotiable", etc. Nothing is parsed or
+ * validated as a number; whatever was typed is what gets printed.
+ *
  * **Data isolation:** Stored under users/{uid}/productSells, just like
  * every other per-account collection in this app, so that each Google
  * account only ever reads/writes its own data.
@@ -31,20 +38,26 @@ data class ProductSell(
     @get:PropertyName("productName") @set:PropertyName("productName")
     var productName: String = "",
 
-    /** Selling price of the product (BDT). */
+    /**
+     * Selling price of the product, exactly as typed by the shopkeeper
+     * (e.g. "1500", "১৫০০", "Negotiable"). Free text - printed as-is.
+     */
     @get:PropertyName("productPrice") @set:PropertyName("productPrice")
-    var productPrice: Double = 0.0,
-
-    /** Amount actually paid by the customer for this sale. */
-    @get:PropertyName("paymentAmount") @set:PropertyName("paymentAmount")
-    var paymentAmount: Double = 0.0,
+    var productPrice: String = "",
 
     /**
-     * Warranty period in months (0 = no warranty). Used to compute the
-     * warranty expiry date when the warranty start date is provided.
+     * Amount paid by the customer, exactly as typed by the shopkeeper.
+     * Free text - printed as-is.
+     */
+    @get:PropertyName("paymentAmount") @set:PropertyName("paymentAmount")
+    var paymentAmount: String = "",
+
+    /**
+     * Warranty period, exactly as typed by the shopkeeper (e.g. "6",
+     * "৬ মাস", "No warranty"). Free text - printed as-is.
      */
     @get:PropertyName("warrantyMonths") @set:PropertyName("warrantyMonths")
-    var warrantyMonths: Int = 0,
+    var warrantyMonths: String = "",
 
     /** Date when the warranty starts (typically the sell date), formatted dd/MM/yyyy. */
     @get:PropertyName("warrantyStartDate") @set:PropertyName("warrantyStartDate")

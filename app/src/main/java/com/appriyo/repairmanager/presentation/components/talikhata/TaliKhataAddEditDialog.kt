@@ -4,13 +4,26 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,6 +48,7 @@ import com.appriyo.repairmanager.data.model.TaliKhataType
  * [onSave] receives everything the caller's ViewModel needs to invoke
  * updateDetails(...) and, for edits with a non-zero amount, adjustBalance(...).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaliKhataAddEditDialog(
     entry: TaliKhataEntry?,
@@ -82,20 +96,59 @@ fun TaliKhataAddEditDialog(
             !hasNegativeError &&
             !newEntryRequiresValidAmount
 
+    // Shared design tokens for every input in the dialog so they read as one
+    // consistent surface. `heightIn(min = fieldHeight)` is the actual fix for
+    // the reported "I can't see what I typed" bug: M3's OutlinedTextField
+    // shrinks to fit its container when there's no min height, and inside an
+    // AlertDialog `text` slot the measured height was too small for the body
+    // text + floating label to coexist.
+    val fieldShape = RoundedCornerShape(12.dp)
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+    )
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isEditing) "Edit Entry" else "Add Entry") },
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Text(
+                text = if (isEditing) "Edit Entry" else "Add Entry",
+                style = MaterialTheme.typography.headlineSmall
+            )
+        },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text("Type", style = MaterialTheme.typography.labelLarge)
+                // Type picker - presented as a labelled segmented-style row so
+                // it's clear these two options belong together and belong to
+                // this dialog.
+                Text(
+                    text = "Type",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TaliKhataType.entries.forEach { option ->
                         FilterChip(
                             selected = type == option,
                             onClick = { type = option },
-                            label = { Text(option.label) }
+                            label = {
+                                Text(
+                                    text = option.label,
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor =
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor =
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         )
                     }
                 }
@@ -104,64 +157,164 @@ fun TaliKhataAddEditDialog(
                     value = personName,
                     onValueChange = { personName = it },
                     label = { Text("Person Name") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                    shape = fieldShape,
+                    colors = fieldColors,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 64.dp)
                 )
 
                 OutlinedTextField(
                     value = phoneNumber,
                     onValueChange = { phoneNumber = it },
                     label = { Text("Phone Number") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Phone,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    modifier = Modifier.fillMaxWidth()
+                    shape = fieldShape,
+                    colors = fieldColors,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 64.dp)
                 )
 
                 OutlinedTextField(
                     value = details,
                     onValueChange = { details = it },
                     label = { Text("Details") },
-                    modifier = Modifier.fillMaxWidth()
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Description,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    singleLine = false,
+                    minLines = 2,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                    shape = fieldShape,
+                    colors = fieldColors,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 88.dp)
                 )
 
                 if (isEditing) {
-                    HorizontalDivider()
-                    Text(
-                        text = "Current Balance: ${formatCurrency(currentBalance)}",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                    Text("Adjustment Amount", style = MaterialTheme.typography.labelLarge)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Current Balance",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = formatCurrency(currentBalance),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+
+                    Text(
+                        text = "Adjustment Amount",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                     OutlinedTextField(
                         value = amountText,
                         onValueChange = { amountText = it },
                         label = { Text("Amount") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.AttachMoney,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         isError = hasInvalidAmountText,
                         supportingText = if (hasInvalidAmountText) {
                             { Text("Enter a valid number") }
                         } else null,
-                        modifier = Modifier.fillMaxWidth()
+                        shape = fieldShape,
+                        colors = fieldColors,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 64.dp)
                     )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
                             selected = isIncrease,
                             onClick = { isIncrease = true },
-                            label = { Text("+") }
+                            label = {
+                                Text(
+                                    "+ Add",
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor =
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor =
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         )
                         FilterChip(
                             selected = !isIncrease,
                             onClick = { isIncrease = false },
-                            label = { Text("-") }
+                            label = {
+                                Text(
+                                    "- Subtract",
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor =
+                                    MaterialTheme.colorScheme.tertiaryContainer,
+                                selectedLabelColor =
+                                    MaterialTheme.colorScheme.onTertiaryContainer
+                            )
                         )
                     }
 
-                    Text(
-                        text = "New Balance: ${formatCurrency(newBalance)}",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "New Balance",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = formatCurrency(newBalance),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
 
                     if (hasNegativeError) {
                         Text(
@@ -175,6 +328,13 @@ fun TaliKhataAddEditDialog(
                         value = amountText,
                         onValueChange = { amountText = it },
                         label = { Text("Initial Amount") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.AttachMoney,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         isError = hasInvalidAmountText || newEntryRequiresValidAmount,
@@ -186,7 +346,11 @@ fun TaliKhataAddEditDialog(
                             }
                             Text(msg)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        shape = fieldShape,
+                        colors = fieldColors,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 64.dp)
                     )
                 }
             }
@@ -196,7 +360,8 @@ fun TaliKhataAddEditDialog(
                 enabled = canSave,
                 onClick = {
                     onSave(personName, phoneNumber, details, type, amount, isIncrease)
-                }
+                },
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Save")
             }

@@ -22,11 +22,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -37,10 +39,13 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -48,6 +53,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -64,6 +70,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.appriyo.repairmanager.data.model.ProductSell
+import com.appriyo.repairmanager.presentation.state.ProductSellDateFilter
+import com.appriyo.repairmanager.presentation.utils.LedgerDateUtils
 import com.appriyo.repairmanager.presentation.viewmodel.PrintViewModel
 import com.appriyo.repairmanager.presentation.viewmodel.ProductSellViewModel
 import kotlinx.coroutines.launch
@@ -77,24 +85,19 @@ import java.util.Locale
  * Single screen that hosts the "Product Sell" feature.
  *
  * **Layout**
- *  1. Top app bar with the screen title.
- *  2. Live search bar over the saved-sales list.
- *  3. A new-sale form with the three required inputs (product name, price,
- *     payment amount) plus the optional warranty fields and a "Save" / a
- *     "Save & Print" button - matching the Add Repair pattern.
- *  4. A scrollable list of all saved sales as cards, each with its own
- *     "Print with POS" button that re-prints the existing invoice.
+ *  1. Top app bar + live search bar over the saved-sales list.
+ *  2. A summary card showing the total sale amount and number of items
+ *     sold for whatever is currently being displayed (Today / All / a
+ *     specific date).
+ *  3. A filter row: "Today" / "All" chips plus a date-picker button that
+ *     shows sales for one specific day.
+ *  4. A scrollable list of matching sales as cards, each with its own
+ *     "Print" button that re-prints the existing invoice.
+ *  5. A FAB that opens the "New Sale" form in a bottom sheet - the form
+ *     itself (fields + Save / Save & Print) is unchanged from before.
  *
  * **Free text everywhere:** Product price, payment amount, and warranty
- * months are NOT restricted to digits. The keyboard is hinted to numeric
- * (via [KeyboardType.Decimal] / [KeyboardType.Number]) purely as a
- * convenience so most users get a number pad by default, but nothing
- * filters or blocks what actually gets typed - Bangla digits, English
- * digits, or plain words like "Free" all pass straight through, since
- * this feature only needs to produce a printed invoice.
- *
- * Add Repair is intentionally kept exactly as it was - this screen only
- * adds a new feature.
+ * months are NOT restricted to digits - see [NewSaleCard] doc for details.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,7 +111,7 @@ fun ProductSellListScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
-    // --- Form state ------------------------------------------------------
+    // --- Form state (lives in the bottom sheet) ---------------------------
     var productName by rememberSaveable { mutableStateOf("") }
     var productPrice by rememberSaveable { mutableStateOf("") }
     var paymentAmount by rememberSaveable { mutableStateOf("") }
@@ -118,9 +121,14 @@ fun ProductSellListScreen(
     var warrantyDetails by rememberSaveable { mutableStateOf("") }
     var notes by rememberSaveable { mutableStateOf("") }
 
+    var showAddSheet by rememberSaveable { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     val context = androidx.compose.ui.platform.LocalContext.current
     val calendar = remember { Calendar.getInstance() }
-    val datePickerDialog = remember {
+
+    // Date picker for the "warranty start date" field inside the form.
+    val warrantyDatePickerDialog = remember {
         DatePickerDialog(
             context,
             { _, year, month, dayOfMonth ->
@@ -133,6 +141,25 @@ fun ProductSellListScreen(
             calendar.get(Calendar.DAY_OF_MONTH)
         ).apply {
             datePicker.maxDate = System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 365 * 5
+        }
+    }
+
+    // Date picker used to filter the LIST by a specific day.
+    val filterDatePickerDialog = remember {
+        DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                val picked = Calendar.getInstance().apply {
+                    set(year, month, dayOfMonth, 0, 0, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.time
+                viewModel.showForDate(picked)
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        ).apply {
+            datePicker.maxDate = System.currentTimeMillis()
         }
     }
 
@@ -159,7 +186,7 @@ fun ProductSellListScreen(
         }
     }
 
-    // Surface a one-shot message after a save completes
+    // Surface a one-shot message after a save completes, and close the sheet.
     LaunchedEffect(uiState.isSuccess) {
         if (uiState.isSuccess) {
             val serial = uiState.generatedSerialNumber.orEmpty()
@@ -170,6 +197,7 @@ fun ProductSellListScreen(
             }
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
             clearForm()
+            showAddSheet = false
             viewModel.consumeOneTimeEvents()
         }
     }
@@ -188,6 +216,23 @@ fun ProductSellListScreen(
         }
     }
 
+    // --- Derived: apply date filter, then search, then compute summary ---
+    val dateFiltered = remember(uiState.productSells, uiState.dateFilter, uiState.selectedDate) {
+        when (uiState.dateFilter) {
+            ProductSellDateFilter.ALL -> uiState.productSells
+            ProductSellDateFilter.TODAY -> uiState.productSells.filter {
+                it.createdAt != null && LedgerDateUtils.isSameDay(it.createdAt!!, Date())
+            }
+            ProductSellDateFilter.SPECIFIC_DATE -> uiState.productSells.filter {
+                it.createdAt != null && LedgerDateUtils.isSameDay(it.createdAt!!, uiState.selectedDate)
+            }
+        }
+    }
+    val filtered = remember(dateFiltered, uiState.searchQuery) {
+        filterSales(dateFiltered, uiState.searchQuery)
+    }
+    val summary = remember(filtered) { summarize(filtered) }
+
     Scaffold(
         topBar = {
             Column {
@@ -203,8 +248,6 @@ fun ProductSellListScreen(
                         }
                     }
                 )
-                // Search bar lives directly under the title so it is always
-                // visible regardless of scroll position.
                 OutlinedTextField(
                     value = uiState.searchQuery,
                     onValueChange = { viewModel.onSearchQueryChanged(it) },
@@ -218,6 +261,11 @@ fun ProductSellListScreen(
                 )
             }
         },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showAddSheet = true }) {
+                Icon(Icons.Filled.Add, contentDescription = "New sale")
+            }
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         LazyColumn(
@@ -227,55 +275,35 @@ fun ProductSellListScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // -------- New-sale form section --------
+            // -------- Summary card --------
             item {
-                NewSaleCard(
-                    productName = productName,
-                    onProductNameChange = { productName = it },
-                    productPrice = productPrice,
-                    onProductPriceChange = { productPrice = it },
-                    paymentAmount = paymentAmount,
-                    onPaymentAmountChange = { paymentAmount = it },
-                    warrantyMonths = warrantyMonths,
-                    onWarrantyMonthsChange = { warrantyMonths = it },
-                    warrantyStartDate = warrantyStartDate,
-                    onWarrantyStartDateClick = { datePickerDialog.show() },
-                    productSerial = productSerial,
-                    onProductSerialChange = { productSerial = it },
-                    warrantyDetails = warrantyDetails,
-                    onWarrantyDetailsChange = { warrantyDetails = it },
-                    notes = notes,
-                    onNotesChange = { notes = it },
-                    fieldErrors = uiState.fieldErrors,
-                    isLoading = uiState.isLoading,
-                    onSaveOnly = {
-                        viewModel.saveSellOnly(
-                            productName, productPrice, paymentAmount,
-                            warrantyMonths, warrantyStartDate,
-                            productSerial, warrantyDetails, notes
-                        )
-                    },
-                    onSaveAndPrint = {
-                        viewModel.saveSellAndPrint(
-                            productName, productPrice, paymentAmount,
-                            warrantyMonths, warrantyStartDate,
-                            productSerial, warrantyDetails, notes
-                        )
-                    }
+                SummaryCard(
+                    totalAmount = summary.totalAmount,
+                    itemCount = summary.itemCount,
+                    filterLabel = filterLabel(uiState.dateFilter, uiState.selectedDate)
+                )
+            }
+
+            // -------- Filter row --------
+            item {
+                FilterRow(
+                    currentFilter = uiState.dateFilter,
+                    selectedDate = uiState.selectedDate,
+                    onTodayClick = { viewModel.showTodayOnly() },
+                    onAllClick = { viewModel.showAll() },
+                    onPickDateClick = { filterDatePickerDialog.show() }
                 )
             }
 
             // -------- Section header for the list --------
             item {
                 Text(
-                    text = "Recent Sales",
+                    text = "Sales",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
-
-            val filtered = filterSales(uiState.productSells, uiState.searchQuery)
 
             if (filtered.isEmpty()) {
                 item {
@@ -291,13 +319,169 @@ fun ProductSellListScreen(
                 }
             }
 
-            item { Spacer(Modifier.height(40.dp)) }
+            item { Spacer(Modifier.height(80.dp)) }
+        }
+    }
+
+    // -------- New-sale bottom sheet --------
+    if (showAddSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showAddSheet = false },
+            sheetState = sheetState
+        ) {
+            NewSaleCard(
+                productName = productName,
+                onProductNameChange = { productName = it },
+                productPrice = productPrice,
+                onProductPriceChange = { productPrice = it },
+                paymentAmount = paymentAmount,
+                onPaymentAmountChange = { paymentAmount = it },
+                warrantyMonths = warrantyMonths,
+                onWarrantyMonthsChange = { warrantyMonths = it },
+                warrantyStartDate = warrantyStartDate,
+                onWarrantyStartDateClick = { warrantyDatePickerDialog.show() },
+                productSerial = productSerial,
+                onProductSerialChange = { productSerial = it },
+                warrantyDetails = warrantyDetails,
+                onWarrantyDetailsChange = { warrantyDetails = it },
+                notes = notes,
+                onNotesChange = { notes = it },
+                fieldErrors = uiState.fieldErrors,
+                isLoading = uiState.isLoading,
+                onSaveOnly = {
+                    viewModel.saveSellOnly(
+                        productName, productPrice, paymentAmount,
+                        warrantyMonths, warrantyStartDate,
+                        productSerial, warrantyDetails, notes
+                    )
+                },
+                onSaveAndPrint = {
+                    viewModel.saveSellAndPrint(
+                        productName, productPrice, paymentAmount,
+                        warrantyMonths, warrantyStartDate,
+                        productSerial, warrantyDetails, notes
+                    )
+                }
+            )
         }
     }
 }
 
 // =============================================================================
-// New-sale form card
+// Summary card
+// =============================================================================
+
+@Composable
+private fun SummaryCard(
+    totalAmount: Double,
+    itemCount: Int,
+    filterLabel: String
+) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = filterLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = formatAmount(totalAmount),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    text = "Total sales",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Icon(
+                    Icons.Filled.Receipt,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "$itemCount",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    text = if (itemCount == 1) "item sold" else "items sold",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                )
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Filter row (Today / All / pick a date)
+// =============================================================================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FilterRow(
+    currentFilter: ProductSellDateFilter,
+    selectedDate: Date,
+    onTodayClick: () -> Unit,
+    onAllClick: () -> Unit,
+    onPickDateClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        FilterChip(
+            selected = currentFilter == ProductSellDateFilter.TODAY,
+            onClick = onTodayClick,
+            label = { Text("Today") }
+        )
+        FilterChip(
+            selected = currentFilter == ProductSellDateFilter.ALL,
+            onClick = onAllClick,
+            label = { Text("All") }
+        )
+        FilterChip(
+            selected = currentFilter == ProductSellDateFilter.SPECIFIC_DATE,
+            onClick = onPickDateClick,
+            leadingIcon = {
+                Icon(
+                    Icons.Filled.CalendarToday,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            },
+            label = {
+                Text(
+                    if (currentFilter == ProductSellDateFilter.SPECIFIC_DATE)
+                        SHORT_DATE_FORMATTER.format(selectedDate)
+                    else "Pick date"
+                )
+            }
+        )
+    }
+}
+
+// =============================================================================
+// New-sale form card (shown inside the FAB's bottom sheet)
 // =============================================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -324,201 +508,192 @@ private fun NewSaleCard(
     onSaveOnly: () -> Unit,
     onSaveAndPrint: () -> Unit
 ) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 24.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Filled.ShoppingCart,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "New Sale",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            // Three primary fields explicitly requested: product name, price, payment
-            OutlinedTextField(
-                value = productName,
-                onValueChange = onProductNameChange,
-                label = { Text("Product Name *") },
-                singleLine = true,
-                isError = fieldErrors.containsKey("productName"),
-                supportingText = { fieldErrors["productName"]?.let { Text(it) } },
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isLoading
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Filled.ShoppingCart,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
             )
-            Spacer(Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Free text: keyboard hints numeric/decimal for convenience,
-                // but any input (digits in any language, or words) is allowed.
-                OutlinedTextField(
-                    value = productPrice,
-                    onValueChange = onProductPriceChange,
-                    label = { Text("Product Price *") },
-                    placeholder = { Text("BDT") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    isError = fieldErrors.containsKey("productPrice"),
-                    supportingText = { fieldErrors["productPrice"]?.let { Text(it) } },
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f),
-                    enabled = !isLoading
-                )
-                OutlinedTextField(
-                    value = paymentAmount,
-                    onValueChange = onPaymentAmountChange,
-                    label = { Text("Payment Amount *") },
-                    placeholder = { Text("BDT") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    isError = fieldErrors.containsKey("paymentAmount"),
-                    supportingText = { fieldErrors["paymentAmount"]?.let { Text(it) } },
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f),
-                    enabled = !isLoading
-                )
-            }
-
-            // Warranty block - optional
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.width(8.dp))
             Text(
-                text = "Warranty (optional)",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 4.dp)
+                "New Sale",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
             )
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Free text: keyboard hints numeric for convenience, but any
-                // input (digits in any language, or words) is allowed.
-                OutlinedTextField(
-                    value = warrantyMonths,
-                    onValueChange = onWarrantyMonthsChange,
-                    label = { Text("Warranty (months)") },
-                    placeholder = { Text("e.g. 6") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f),
-                    enabled = !isLoading
-                )
-                OutlinedTextField(
-                    value = warrantyStartDate,
-                    onValueChange = { },
-                    label = { Text("Warranty Start") },
-                    singleLine = true,
-                    readOnly = true,
-                    trailingIcon = {
-                        IconButton(onClick = onWarrantyStartDateClick) {
-                            Icon(Icons.Filled.CalendarToday, contentDescription = "Pick date")
-                        }
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f),
-                    enabled = !isLoading
-                )
-            }
-            Spacer(Modifier.height(10.dp))
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = productName,
+            onValueChange = onProductNameChange,
+            label = { Text("Product Name *") },
+            singleLine = true,
+            isError = fieldErrors.containsKey("productName"),
+            supportingText = { fieldErrors["productName"]?.let { Text(it) } },
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             OutlinedTextField(
-                value = productSerial,
-                onValueChange = onProductSerialChange,
-                label = { Text("Product S/N / IMEI") },
+                value = productPrice,
+                onValueChange = onProductPriceChange,
+                label = { Text("Product Price *") },
+                placeholder = { Text("BDT") },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                isError = fieldErrors.containsKey("productPrice"),
+                supportingText = { fieldErrors["productPrice"]?.let { Text(it) } },
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f),
                 enabled = !isLoading
             )
-            Spacer(Modifier.height(10.dp))
             OutlinedTextField(
-                value = warrantyDetails,
-                onValueChange = onWarrantyDetailsChange,
-                label = { Text("Warranty Terms / Conditions") },
-                placeholder = { Text("e.g. Service warranty, no physical damage") },
-                minLines = 2,
-                maxLines = 3,
+                value = paymentAmount,
+                onValueChange = onPaymentAmountChange,
+                label = { Text("Payment Amount *") },
+                placeholder = { Text("BDT") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                isError = fieldErrors.containsKey("paymentAmount"),
+                supportingText = { fieldErrors["paymentAmount"]?.let { Text(it) } },
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f),
                 enabled = !isLoading
             )
-            Spacer(Modifier.height(10.dp))
+        }
+
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Warranty (optional)",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             OutlinedTextField(
-                value = notes,
-                onValueChange = onNotesChange,
-                label = { Text("Notes (optional)") },
-                minLines = 1,
-                maxLines = 2,
+                value = warrantyMonths,
+                onValueChange = onWarrantyMonthsChange,
+                label = { Text("Warranty (months)") },
+                placeholder = { Text("e.g. 6") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f),
                 enabled = !isLoading
             )
+            OutlinedTextField(
+                value = warrantyStartDate,
+                onValueChange = { },
+                label = { Text("Warranty Start") },
+                singleLine = true,
+                readOnly = true,
+                trailingIcon = {
+                    IconButton(onClick = onWarrantyStartDateClick) {
+                        Icon(Icons.Filled.CalendarToday, contentDescription = "Pick date")
+                    }
+                },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f),
+                enabled = !isLoading
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(
+            value = productSerial,
+            onValueChange = onProductSerialChange,
+            label = { Text("Product S/N / IMEI") },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading
+        )
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(
+            value = warrantyDetails,
+            onValueChange = onWarrantyDetailsChange,
+            label = { Text("Warranty Terms / Conditions") },
+            placeholder = { Text("e.g. Service warranty, no physical damage") },
+            minLines = 2,
+            maxLines = 3,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading
+        )
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(
+            value = notes,
+            onValueChange = onNotesChange,
+            label = { Text("Notes (optional)") },
+            minLines = 1,
+            maxLines = 2,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading
+        )
 
-            Spacer(Modifier.height(14.dp))
-            HorizontalDivider()
-            Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
 
-            // Bottom action bar mirrors Add Repair: Save only | Save & Print
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Button(
+                onClick = onSaveOnly,
+                enabled = !isLoading,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.weight(1f).height(52.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                )
             ) {
-                Button(
-                    onClick = onSaveOnly,
-                    enabled = !isLoading,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.weight(1f).height(52.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    } else {
-                        Icon(Icons.Filled.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Save Only")
-                    }
+                } else {
+                    Icon(Icons.Filled.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Save Only")
                 }
-                Button(
-                    onClick = onSaveAndPrint,
-                    enabled = !isLoading,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.weight(1f).height(52.dp)
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        Icon(Icons.Filled.Print, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Save & Print")
-                    }
+            }
+            Button(
+                onClick = onSaveAndPrint,
+                enabled = !isLoading,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.weight(1f).height(52.dp)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Icon(Icons.Filled.Print, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Save & Print")
                 }
             }
         }
@@ -579,8 +754,6 @@ private fun ProductSellCard(
                     modifier = Modifier.size(15.dp)
                 )
                 Spacer(Modifier.width(6.dp))
-                // productPrice / paymentAmount are free text - shown exactly
-                // as the shopkeeper typed them, no numeric formatting applied.
                 Text(
                     text = "Price ${sell.productPrice}   •   Paid ${sell.paymentAmount}",
                     style = MaterialTheme.typography.bodyMedium,
@@ -662,7 +835,7 @@ private fun EmptySalesState(isSearching: Boolean) {
             Spacer(Modifier.height(8.dp))
             Text(
                 text = if (isSearching) "No sales match your search."
-                else "No sales yet. Fill the form above to create one.",
+                else "No sales for this period yet.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -675,6 +848,9 @@ private fun EmptySalesState(isSearching: Boolean) {
 // =============================================================================
 
 private val DATE_TIME_FORMATTER = SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale.US)
+private val SHORT_DATE_FORMATTER = SimpleDateFormat("d MMM yyyy", Locale.US)
+
+private data class SalesSummary(val totalAmount: Double, val itemCount: Int)
 
 private fun todayFormatted(): String {
     val cal = Calendar.getInstance()
@@ -690,6 +866,14 @@ private fun formatDateTime(date: Date?): String {
     return date?.let { DATE_TIME_FORMATTER.format(it) } ?: "-"
 }
 
+private fun filterLabel(filter: ProductSellDateFilter, selectedDate: Date): String {
+    return when (filter) {
+        ProductSellDateFilter.TODAY -> "Today"
+        ProductSellDateFilter.ALL -> "All time"
+        ProductSellDateFilter.SPECIFIC_DATE -> SHORT_DATE_FORMATTER.format(selectedDate)
+    }
+}
+
 private fun filterSales(sales: List<ProductSell>, query: String): List<ProductSell> {
     val trimmed = query.trim()
     if (trimmed.isEmpty()) return sales
@@ -699,5 +883,41 @@ private fun filterSales(sales: List<ProductSell>, query: String): List<ProductSe
                 sell.serialNumber.lowercase(Locale.US).contains(needle) ||
                 sell.productSerial.lowercase(Locale.US).contains(needle) ||
                 sell.notes.lowercase(Locale.US).contains(needle)
+    }
+}
+
+/**
+ * Sums up [ProductSell.productPrice] across the given list, tolerating
+ * free-text values. Bangla digits are normalised to Latin digits first;
+ * anything left that isn't parseable as a number (e.g. "Free",
+ * "Negotiable") simply contributes 0 to the total but the sale is still
+ * counted in [SalesSummary.itemCount].
+ */
+private fun summarize(sales: List<ProductSell>): SalesSummary {
+    var total = 0.0
+    for (sale in sales) {
+        parseAmount(sale.productPrice)?.let { total += it }
+    }
+    return SalesSummary(totalAmount = total, itemCount = sales.size)
+}
+
+private fun parseAmount(raw: String): Double? {
+    if (raw.isBlank()) return null
+    val normalized = raw.map { ch ->
+        when (ch) {
+            '০' -> '0'; '১' -> '1'; '২' -> '2'; '৩' -> '3'; '৪' -> '4'
+            '৫' -> '5'; '৬' -> '6'; '৭' -> '7'; '৮' -> '8'; '৯' -> '9'
+            else -> ch
+        }
+    }.joinToString("")
+    val cleaned = normalized.filter { it.isDigit() || it == '.' }
+    return cleaned.toDoubleOrNull()
+}
+
+private fun formatAmount(amount: Double): String {
+    return if (amount == amount.toLong().toDouble()) {
+        "৳${amount.toLong()}"
+    } else {
+        String.format(Locale.US, "৳%.2f", amount)
     }
 }

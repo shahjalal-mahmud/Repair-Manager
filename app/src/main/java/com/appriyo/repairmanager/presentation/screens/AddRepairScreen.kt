@@ -85,6 +85,7 @@ import com.appriyo.repairmanager.presentation.components.OptionDropdown
 import com.appriyo.repairmanager.presentation.components.SectionCard
 import com.appriyo.repairmanager.presentation.viewmodel.AddRepairViewModel
 import com.appriyo.repairmanager.util.ContactsHelper
+import com.appriyo.repairmanager.util.PhoneNumberNormalizer
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import java.util.Calendar
@@ -105,7 +106,6 @@ fun AddRepairScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
-    // Form fields
     var customerName by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
     var deviceModel by remember { mutableStateOf("") }
@@ -180,7 +180,13 @@ fun AddRepairScreen(
                 showNoPhoneSnackbar = true
             } else {
                 customerName = picked.displayName
-                phoneNumber = picked.phoneNumber
+                // Fall back to the raw string when we can't recognize the
+                // format - the user can fix it manually.
+                val importedPhone = PhoneNumberNormalizer
+                    .normalizeOrEmpty(picked.phoneNumber)
+                    .ifBlank { picked.phoneNumber }
+                phoneNumber = importedPhone
+                viewModel.clearFieldError(AddRepairViewModel.FIELD_PHONE_NUMBER)
             }
         }
     }
@@ -244,53 +250,52 @@ fun AddRepairScreen(
         draftId = UUID.randomUUID().toString()
     }
 
-    LaunchedEffect(uiState.isSuccess) {
-        if (uiState.isSuccess) {
-            val serial = uiState.generatedSerialNumber.orEmpty()
-            val message = if (uiState.printSuccess == true) {
-                "Repair saved and printed successfully! Serial: $serial"
-            } else {
-                "Repair saved successfully! Serial: $serial"
-            }
-            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    LaunchedEffect(uiState.saveSuccess) {
+        val ev = uiState.saveSuccess ?: return@LaunchedEffect
+        val printed = uiState.printSuccess == true
+        val message = if (printed) {
+            "Repair saved and printed successfully! Serial: ${ev.serialNumber}"
+        } else {
+            "Repair saved successfully! Serial: ${ev.serialNumber}"
+        }
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
 
-            // Phonebook side-effect: if the user opted in via the
-            // "Save this contact to my phonebook" switch, persist the typed
-            // name+number to the device's Contacts app now. This runs in
-            // the screen's coroutineScope (not the ViewModel) so the VM
-            // stays Firestore-only.
-            //
-            // Capture the values BEFORE clearFields() - clearFields() resets
-            // customerName / phoneNumber to "" and would erase them.
-            if (saveContactToPhonebook) {
-                val nameToSave = customerName
-                val phoneToSave = phoneNumber
-                if (nameToSave.isNotBlank() && phoneToSave.isNotBlank()) {
-                    coroutineScope.launch {
-                        val ok = ContactsHelper.saveToPhonebook(
-                            context = context,
-                            displayName = nameToSave,
-                            phoneNumber = phoneToSave
-                        )
-                        val msg = if (ok) {
-                            "Contact saved to phonebook."
-                        } else {
-                            "Couldn't save contact to phonebook."
-                        }
-                        snackbarHostState.showSnackbar(msg)
+        // Phonebook side-effect: if the user opted in via the
+        // "Save this contact to my phonebook" switch, persist the typed
+        // name+number to the device's Contacts app now. This runs in
+        // the screen's coroutineScope (not the ViewModel) so the VM
+        // stays Firestore-only.
+        //
+        // Capture the values BEFORE clearFields() - clearFields() resets
+        // customerName / phoneNumber to "" and would erase them.
+        if (saveContactToPhonebook) {
+            val nameToSave = customerName
+            val phoneToSave = phoneNumber
+            if (nameToSave.isNotBlank() && phoneToSave.isNotBlank()) {
+                coroutineScope.launch {
+                    val ok = ContactsHelper.saveToPhonebook(
+                        context = context,
+                        displayName = nameToSave,
+                        phoneNumber = phoneToSave
+                    )
+                    val msg = if (ok) {
+                        "Contact saved to phonebook."
+                    } else {
+                        "Couldn't save contact to phonebook."
                     }
-                } else {
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar(
-                            "Add customer name and phone to save to phonebook."
-                        )
-                    }
+                    snackbarHostState.showSnackbar(msg)
+                }
+            } else {
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(
+                        "Add customer name and phone to save to phonebook."
+                    )
                 }
             }
-
-            clearFields()
-            viewModel.consumeOneTimeEvents()
         }
+
+        clearFields()
+        viewModel.consumeSaveSuccess()
     }
 
     // WRAP_CONTACTS denied (incl. "don't ask again") - offer a "Settings"
@@ -323,21 +328,13 @@ fun AddRepairScreen(
         }
     }
 
-    LaunchedEffect(uiState.printErrorMessage) {
-        uiState.printErrorMessage?.let { message ->
-            coroutineScope.launch {
-                snackbarHostState.showSnackbar("Print Error: $message")
-            }
-            viewModel.consumePrintError()
-        }
-    }
-
-    LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let { message ->
-            coroutineScope.launch {
-                snackbarHostState.showSnackbar(message)
-            }
-            viewModel.consumeOneTimeEvents()
+    // Single source of truth for snackbar messages. Importantly, this
+    // never touches uiState.fieldErrors - the inline red error text
+    // remains visible until the user edits the field or a save succeeds.
+    LaunchedEffect(uiState.snackbarMessage) {
+        uiState.snackbarMessage?.let { message ->
+            snackbarHostState.showSnackbar(message.text)
+            viewModel.consumeSnackbar()
         }
     }
 
@@ -458,11 +455,18 @@ fun AddRepairScreen(
             SectionCard(title = "Customer", icon = Icons.Filled.Person) {
                 OutlinedTextField(
                     value = customerName,
-                    onValueChange = { customerName = it },
+                    onValueChange = {
+                        customerName = it
+                        viewModel.clearFieldError(AddRepairViewModel.FIELD_CUSTOMER_NAME)
+                    },
                     label = { Text("Customer Name *") },
                     singleLine = true,
-                    isError = uiState.fieldErrors.containsKey("customerName"),
-                    supportingText = { uiState.fieldErrors["customerName"]?.let { Text(it) } },
+                    isError = uiState.fieldErrors.containsKey(AddRepairViewModel.FIELD_CUSTOMER_NAME),
+                    supportingText = {
+                        uiState.fieldErrors[AddRepairViewModel.FIELD_CUSTOMER_NAME]?.let {
+                            Text(it)
+                        }
+                    },
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading
@@ -470,12 +474,19 @@ fun AddRepairScreen(
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = phoneNumber,
-                    onValueChange = { phoneNumber = it },
-                    label = { Text("Phone Number (11 digits, optional)") },
+                    onValueChange = {
+                        phoneNumber = it
+                        viewModel.clearFieldError(AddRepairViewModel.FIELD_PHONE_NUMBER)
+                    },
+                    label = { Text("Phone Number (optional, e.g. 01712345678)") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    isError = uiState.fieldErrors.containsKey("phoneNumber"),
-                    supportingText = { uiState.fieldErrors["phoneNumber"]?.let { Text(it) } },
+                    isError = uiState.fieldErrors.containsKey(AddRepairViewModel.FIELD_PHONE_NUMBER),
+                    supportingText = {
+                        uiState.fieldErrors[AddRepairViewModel.FIELD_PHONE_NUMBER]?.let {
+                            Text(it)
+                        }
+                    },
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading

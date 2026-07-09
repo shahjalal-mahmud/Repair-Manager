@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Date
 
 /**
  * ViewModel for the Product Sell / Invoice screen.
@@ -192,6 +193,29 @@ class ProductSellViewModel(
 
     fun onSearchQueryChanged(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
+    }
+
+    // ── Date filter ──────────────────────────────────────────────────────
+
+    fun showTodayOnly() {
+        _uiState.update {
+            it.copy(dateFilter = com.appriyo.repairmanager.presentation.state.ProductSellDateFilter.TODAY)
+        }
+    }
+
+    fun showAll() {
+        _uiState.update {
+            it.copy(dateFilter = com.appriyo.repairmanager.presentation.state.ProductSellDateFilter.ALL)
+        }
+    }
+
+    fun showForDate(date: Date) {
+        _uiState.update {
+            it.copy(
+                dateFilter = com.appriyo.repairmanager.presentation.state.ProductSellDateFilter.SPECIFIC_DATE,
+                selectedDate = date
+            )
+        }
     }
 
     // ── One-time events ───────────────────────────────────────────────────

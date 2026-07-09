@@ -2,6 +2,16 @@
 package com.appriyo.repairmanager.presentation.state
 
 import com.appriyo.repairmanager.data.model.ProductSell
+import java.util.Date
+
+/**
+ * Which date range the product sell list is currently showing.
+ */
+enum class ProductSellDateFilter {
+    TODAY,
+    ALL,
+    SPECIFIC_DATE
+}
 
 /**
  * UI state for the Product Sell / Invoice screen.
@@ -20,9 +30,15 @@ data class ProductSellUiState(
     val printErrorMessage: String? = null,
     val missingPermissions: List<String> = emptyList(),
 
-    /** Realtime list of all product sell records, newest first. */
+    /** Realtime list of ALL product sell records, newest first (unfiltered). */
     val productSells: List<ProductSell> = emptyList(),
 
-    /** Free-text search applied to the product sell list. */
-    val searchQuery: String = ""
+    /** Free-text search applied on top of the date filter. */
+    val searchQuery: String = "",
+
+    /** Which date range is currently applied to the list. Defaults to TODAY. */
+    val dateFilter: ProductSellDateFilter = ProductSellDateFilter.TODAY,
+
+    /** Only meaningful when [dateFilter] == SPECIFIC_DATE. */
+    val selectedDate: Date = Date()
 )

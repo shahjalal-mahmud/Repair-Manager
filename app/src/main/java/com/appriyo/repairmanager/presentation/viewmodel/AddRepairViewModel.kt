@@ -7,6 +7,9 @@ import com.appriyo.repairmanager.data.model.RepairStatus
 import com.appriyo.repairmanager.data.repository.AuthRepository
 import com.appriyo.repairmanager.data.repository.RepairRepository
 import com.appriyo.repairmanager.presentation.state.AddRepairUiState
+import com.appriyo.repairmanager.presentation.state.SaveSuccessEvent
+import com.appriyo.repairmanager.presentation.state.SnackbarMessage
+import com.appriyo.repairmanager.util.PhoneNumberNormalizer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -25,19 +28,31 @@ class AddRepairViewModel(
         viewModelScope.launch {
             printViewModel.uiState.collect { printState ->
                 _uiState.update { state ->
-                    state.copy(
-                        printSuccess = if (printState.successMessage != null) true
-                        else if (printState.errorMessage != null) false
-                        else state.printSuccess,
-                        printErrorMessage = printState.errorMessage,
-                        missingPermissions = printState.missingPermissions
-                    )
+                    val newPrintSuccess = when {
+                        printState.successMessage != null -> true
+                        printState.errorMessage != null -> false
+                        else -> state.printSuccess
+                    }
+                    if (state.printSuccess == newPrintSuccess &&
+                        state.printErrorMessage == printState.errorMessage &&
+                        state.missingPermissions == printState.missingPermissions
+                    ) {
+                        state
+                    } else {
+                        state.copy(
+                            printSuccess = newPrintSuccess,
+                            printErrorMessage = printState.errorMessage,
+                            missingPermissions = printState.missingPermissions
+                        )
+                    }
                 }
                 if (printState.successMessage != null) printViewModel.consumeSuccess()
                 if (printState.errorMessage != null) printViewModel.consumeError()
             }
         }
     }
+
+    // ── public save entry points ──────────────────────────────────────────
 
     fun saveRepairOnly(
         customerName: String,
@@ -57,9 +72,9 @@ class AddRepairViewModel(
         simTrayIncluded: Boolean,
         backCoverIncluded: Boolean,
         deadPhonePermission: Boolean,
-        draftId: String = "",           // ← new with default
-        photoCount: Int = 0,            // ← new with default
-        videoCount: Int = 0             // ← new with default
+        draftId: String = "",
+        photoCount: Int = 0,
+        videoCount: Int = 0
     ) = saveRepair(
         customerName, phoneNumber, deviceModel, problemDescription,
         expectedDeliveryDate, paymentInfo, additionalDetails, boxNumber,
@@ -86,9 +101,9 @@ class AddRepairViewModel(
         simTrayIncluded: Boolean,
         backCoverIncluded: Boolean,
         deadPhonePermission: Boolean,
-        draftId: String = "",           // ← new with default
-        photoCount: Int = 0,            // ← new with default
-        videoCount: Int = 0             // ← new with default
+        draftId: String = "",
+        photoCount: Int = 0,
+        videoCount: Int = 0
     ) = saveRepair(
         customerName, phoneNumber, deviceModel, problemDescription,
         expectedDeliveryDate, paymentInfo, additionalDetails, boxNumber,
@@ -96,6 +111,44 @@ class AddRepairViewModel(
         memoryCardIncluded, simTrayIncluded, backCoverIncluded, deadPhonePermission,
         draftId, photoCount, videoCount, shouldPrint = true
     )
+
+    // ── validation lifecycle helpers (UI-driven) ───────────────────────────
+
+    /**
+     * Remove the error for a single field. Called by the screen from each
+     * TextField's onValueChange so that the error vanishes as soon as the
+     * user starts correcting it.
+     */
+    fun clearFieldError(field: String) {
+        _uiState.update { state ->
+            if (state.fieldErrors.containsKey(field)) {
+                val updated = state.fieldErrors.toMutableMap().apply { remove(field) }
+                state.copy(fieldErrors = updated)
+            } else state
+        }
+    }
+
+    fun consumeSnackbar() {
+        _uiState.update { it.copy(snackbarMessage = null) }
+    }
+
+    fun consumeSaveSuccess() {
+        _uiState.update { it.copy(saveSuccess = null) }
+    }
+
+    fun consumePrintSuccess() {
+        _uiState.update { it.copy(printSuccess = null) }
+    }
+
+    fun consumePrintError() {
+        _uiState.update { it.copy(printErrorMessage = null) }
+    }
+
+    fun consumeMissingPermissions() {
+        _uiState.update { it.copy(missingPermissions = emptyList()) }
+    }
+
+    // ── core save flow ────────────────────────────────────────────────────
 
     private fun saveRepair(
         customerName: String,
@@ -120,13 +173,12 @@ class AddRepairViewModel(
         videoCount: Int,
         shouldPrint: Boolean
     ) {
-        val errors = validateFields(customerName, phoneNumber)
+        val errors = validate(customerName, phoneNumber)
         if (errors.isNotEmpty()) {
             _uiState.update {
                 it.copy(
                     fieldErrors = errors,
-                    errorMessage = "Please fix the highlighted fields before saving.",
-                    isSuccess = false
+                    snackbarMessage = SnackbarMessage.Validation(joinMessages(errors))
                 )
             }
             return
@@ -137,25 +189,22 @@ class AddRepairViewModel(
             _uiState.update {
                 it.copy(
                     isLoading = false,
-                    isSuccess = false,
-                    errorMessage = "You must be signed in to save a repair record."
+                    snackbarMessage = SnackbarMessage.Error(
+                        "You must be signed in to save a repair record."
+                    )
                 )
             }
             return
         }
 
+        val normalizedPhone = PhoneNumberNormalizer.normalizeOrEmpty(phoneNumber)
+
         viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    isLoading = true,
-                    errorMessage = null,
-                    fieldErrors = emptyMap()
-                )
-            }
+            _uiState.update { it.copy(isLoading = true) }
 
             val result = repairRepository.createRepair(
                 customerName = customerName.trim(),
-                phoneNumber = phoneNumber.trim(),
+                phoneNumber = normalizedPhone,
                 deviceModel = deviceModel.trim(),
                 problemDescription = problemDescription.trim(),
                 expectedDeliveryDate = expectedDeliveryDate.trim(),
@@ -183,9 +232,10 @@ class AddRepairViewModel(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            isSuccess = true,
-                            errorMessage = null,
-                            generatedSerialNumber = repair.serialNumber
+                            fieldErrors = emptyMap(),
+                            saveSuccess = SaveSuccessEvent(
+                                serialNumber = repair.serialNumber
+                            )
                         )
                     }
                     if (shouldPrint) printViewModel.printRepair(repair)
@@ -194,9 +244,12 @@ class AddRepairViewModel(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            isSuccess = false,
-                            errorMessage = exception.localizedMessage
-                                ?: "Failed to save repair record. Please try again."
+                            snackbarMessage = SnackbarMessage.Error(
+                                exception.localizedMessage
+                                    ?: "Failed to save repair record. Please try again."
+                            )
+                            // fieldErrors intentionally left alone - the
+                            // user may still be correcting them.
                         )
                     }
                 }
@@ -204,33 +257,41 @@ class AddRepairViewModel(
         }
     }
 
-    fun consumeOneTimeEvents() {
-        _uiState.update {
-            it.copy(
-                isSuccess = false,
-                errorMessage = null,
-                printSuccess = null,
-                printErrorMessage = null,
-                fieldErrors = emptyMap()
-            )
-        }
-    }
+    // ── validation ────────────────────────────────────────────────────────
 
-    fun consumePrintError() {
-        _uiState.update { it.copy(printErrorMessage = null) }
-    }
-
-    fun consumeMissingPermissions() {
-        _uiState.update { it.copy(missingPermissions = emptyList()) }
-    }
-
-    private fun validateFields(customerName: String, phoneNumber: String): Map<String, String> {
+    /**
+     * Returns an empty map when valid, otherwise a per-field error map.
+     *
+     * The phone is OPTIONAL: a blank value is accepted, and a non-blank
+     * value is run through [PhoneNumberNormalizer] first. Only after
+     * normalization do we decide whether to flag it as invalid. This way
+     * users can save with no phone at all, and pasted/typed numbers in
+     * any common BD format round-trip correctly.
+     */
+    private fun validate(
+        customerName: String,
+        phoneRaw: String
+    ): Map<String, String> {
         val errors = mutableMapOf<String, String>()
-        if (customerName.isBlank()) errors["customerName"] = "Customer name is required."
-        val trimmedPhone = phoneNumber.trim()
-        if (trimmedPhone.isNotBlank() && !trimmedPhone.matches(Regex("^\\d{11}$"))) {
-            errors["phoneNumber"] = "Phone number must be exactly 11 digits."
+        if (customerName.isBlank()) {
+            errors[FIELD_CUSTOMER_NAME] = "Customer name is required."
+        }
+        val trimmedPhone = phoneRaw.trim()
+        if (trimmedPhone.isNotBlank() &&
+            PhoneNumberNormalizer.normalize(trimmedPhone) == null
+        ) {
+            errors[FIELD_PHONE_NUMBER] =
+                "Phone number must be a valid 11-digit Bangladeshi number (e.g. 01712345678)."
         }
         return errors
+    }
+
+    private fun joinMessages(errors: Map<String, String>): String =
+        errors.entries.joinToString(" ") { it.value }
+
+    companion object {
+        /** Field keys referenced by [AddRepairUiState.fieldErrors]. */
+        const val FIELD_CUSTOMER_NAME = "customerName"
+        const val FIELD_PHONE_NUMBER = "phoneNumber"
     }
 }
